@@ -192,7 +192,14 @@ class _LoginScreenState extends State<LoginScreen> {
           (route) => false,
         );
       } else if (res.statusCode == 401) {
-        _showError("Waiting for acceptance");
+        final parsedBody = jsonDecode(res.body);
+        final errorMessage =
+            parsedBody['message'] ?? "Invalid email or password";
+        _showError(errorMessage);
+      } else {
+        final parsedBody = jsonDecode(res.body);
+        final errorMessage = parsedBody['message'] ?? "An error occurred";
+        _showError(errorMessage);
       }
     } catch (e) {
       _showError("Something went wrong. Please try again.");
