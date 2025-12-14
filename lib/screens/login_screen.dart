@@ -167,6 +167,7 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
 
     final url = Uri.parse(kStaffLoginRoute);
+
     final body = jsonEncode({"email": email, "password": password});
 
     try {
@@ -184,8 +185,10 @@ class _LoginScreenState extends State<LoginScreen> {
         final prefs = await SharedPreferences.getInstance();
         // Store JWT token for authentication
         prefs.setString('jwt_token', parsedBody['data']['token']);
-        // Store student ID for fetching attendance records
-        prefs.setString('student_id', parsedBody['data']['user']['_id']);
+        // Store staff ID for fetching attendance records
+        prefs.setString('staff_id', parsedBody['data']['user']['_id']);
+        // Store user data for profile display
+        prefs.setString('user_data', jsonEncode(parsedBody['data']['user']));
 
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const AppShell()),

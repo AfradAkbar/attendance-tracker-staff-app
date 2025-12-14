@@ -2,8 +2,11 @@ import 'dart:convert';
 import 'package:animated_bottom_navigation_bar/animated_bottom_navigation_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:staff_app/screens/login_screen.dart';
-import 'package:http/http.dart' as http;
+import 'package:staff_app/notifiers/user_notifier.dart';
+import 'package:staff_app/screens/profile_view.dart';
+import 'package:staff_app/screens/home_view.dart';
+import 'package:staff_app/screens/students_view.dart';
+import 'package:staff_app/screens/attendance_view.dart';
 
 class AppShell extends StatefulWidget {
   const AppShell({super.key});
@@ -21,79 +24,51 @@ class _AppShellState extends State<AppShell> {
   // Icons for navigation items
   final iconList = <IconData>[
     Icons.home,
-    Icons.schedule, // Timetable
-    Icons.calendar_month, // Attendance
+    Icons.fact_check_outlined, // Attendance
+    Icons.people, // Students
     Icons.person, // Profile
   ];
 
   // Titles for each tab
-  final titles = ['Home', 'Timetable', 'Attendance', 'Profile'];
+  final titles = ['Home', 'Attendance', 'Students', 'Profile'];
 
   // Different page widgets
   final List<Widget> pages = [
-    // Placeholder pages — replace with real views when available
-    const Center(child: Text('Home', style: TextStyle(fontSize: 20))),
-    const Center(child: Text('Timetable', style: TextStyle(fontSize: 20))),
-    const Center(child: Text('Attendance', style: TextStyle(fontSize: 20))),
-    // Profile page with logout
-    Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SizedBox(height: 8),
-          const Text(
-            'Profile',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            'Signed in as',
-            style: TextStyle(fontSize: 14, color: Colors.black54),
-          ),
-          const SizedBox(height: 8),
-          // Text(
-          //   userDat?['email'] ?? 'Unknown',
-          //   style: const TextStyle(fontSize: 16),
-          // ),
-          const Spacer(),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              icon: const Icon(Icons.logout),
-              label: const Text('Logout'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.redAccent,
-              ),
-              onPressed: () async {
-                final prefs = await SharedPreferences.getInstance();
-                await prefs.remove('jwt_token');
-                await prefs.remove('student_id');
-
-                // if (!mounted) return;
-
-                // Navigator.of(context).pushAndRemoveUntil(
-                //   MaterialPageRoute(builder: (_) => const LoginScreen()),
-                //   (route) => false,
-                // );
-              },
-            ),
-          ),
-        ],
-      ),
-    ),
+    const HomeView(),
+    const AttendanceView(),
+    const StudentsView(),
+    // Profile page
+    const ProfileView(),
   ];
 
+  @override
   void initState() {
     super.initState();
     _loadProfile();
   }
 
   Future<void> _loadProfile() async {
-    // final data = await _getProfileData();
+    print('[AppShell] Loading profile...');
+    final prefs = await SharedPreferences.getInstance();
+    final userDataJson = prefs.getString('user_data');
+
+    print('[AppShell] user_data from prefs: $userDataJson');
+
+    if (userDataJson != null) {
+      try {
+        final userData = jsonDecode(userDataJson) as Map<String, dynamic>;
+        print('[AppShell] Parsed user data: $userData');
+        userNotifier.value = UserModel.fromJson(userData);
+        print('[AppShell] UserModel created: ${userNotifier.value?.name}');
+      } catch (e) {
+        print('[AppShell] Error loading user data: $e');
+      }
+    } else {
+      print('[AppShell] No user_data found in SharedPreferences');
+    }
+
     setState(() {
-      // userData = data?['user'];
-      // isLoading = false;
+      isLoading = false;
     });
   }
 
