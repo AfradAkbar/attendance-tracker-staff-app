@@ -1,8 +1,8 @@
+import 'package:staff_app/api_service.dart';
 import 'package:staff_app/screens/login_screen.dart';
 import 'package:staff_app/screens/profile_details_screen.dart';
 import 'package:staff_app/notifiers/user_notifier.dart';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class ProfileView extends StatefulWidget {
   const ProfileView({super.key});
@@ -321,8 +321,7 @@ void showLogoutModal(BuildContext context) {
                       ),
                     ),
                     onPressed: () async {
-                      final prefs = await SharedPreferences.getInstance();
-                      await prefs.clear();
+                      await ApiService.clearToken();
                       Navigator.of(context).pushAndRemoveUntil(
                         MaterialPageRoute(builder: (context) => LoginScreen()),
                         (route) => false,

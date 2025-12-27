@@ -1,11 +1,7 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:staff_app/api_service.dart';
 import 'package:staff_app/constants.dart';
-import 'package:staff_app/models/student_model.dart';
-import 'package:staff_app/models/subject_model.dart';
 
 class AttendanceView extends StatefulWidget {
   const AttendanceView({super.key});
@@ -19,82 +15,93 @@ class _AttendanceViewState extends State<AttendanceView> {
   static const Color surfaceColor = Color(0xFFF8F6F4);
 
   DateTime selectedDate = DateTime.now();
-  int selectedHour = 1;
-  SubjectModel? selectedSubject;
-
-  List<SubjectModel> subjects = [];
-  List<StudentModel> students = [];
+  List<Map<String, dynamic>> timetableSlots = [];
+  Map<String, dynamic>? selectedSlot;
+  List<Map<String, dynamic>> students = [];
   Map<String, String> attendanceMap = {}; // studentId: status
 
-  bool isLoadingSubjects = true;
+  bool isLoadingTimetable = true;
   bool isLoadingStudents = false;
   bool isSaving = false;
+  String? currentDay;
+  String? currentDate;
 
   @override
   void initState() {
     super.initState();
-    _loadSubjects();
+    _loadTimetableForDate();
   }
 
-  Future<void> _loadSubjects() async {
-    setState(() => isLoadingSubjects = true);
-
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('jwt_token') ?? '';
+  Future<void> _loadTimetableForDate() async {
+    setState(() => isLoadingTimetable = true);
 
     try {
-      final res = await http.get(
-        Uri.parse(kStaffMySubjects),
-        headers: {'Authorization': 'Bearer $token'},
-      );
+      final dateStr = DateFormat('yyyy-MM-dd').format(selectedDate);
+      final data = await ApiService.get('$kStaffTodayTimetable?date=$dateStr');
 
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        if (data['data'] != null) {
-          setState(() {
-            subjects = (data['data'] as List)
-                .map((json) => SubjectModel.fromJson(json))
-                .toList();
-          });
-        }
+      if (data != null && data['data'] != null) {
+        setState(() {
+          timetableSlots = List<Map<String, dynamic>>.from(data['data']);
+          currentDay = data['day']?.toString();
+          currentDate = data['date']?.toString();
+        });
       }
     } catch (e) {
-      print('Error loading subjects: $e');
+      print('Error loading timetable: $e');
     } finally {
-      setState(() => isLoadingSubjects = false);
+      setState(() => isLoadingTimetable = false);
     }
   }
 
-  Future<void> _loadStudents() async {
+  Future<void> _loadStudentsForSlot(Map<String, dynamic> slot) async {
+    final batchId = slot['batch']?['_id']?.toString();
+    final hour = slot['hour'];
+    if (batchId == null) return;
+
     setState(() {
+      selectedSlot = slot;
       isLoadingStudents = true;
+      students.clear();
       attendanceMap.clear();
     });
 
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('jwt_token') ?? '';
-
     try {
-      final res = await http.get(
-        Uri.parse(kStaffMyStudents),
-        headers: {'Authorization': 'Bearer $token'},
+      // Load students
+      final studentsData = await ApiService.get(
+        '$kStaffBatchStudents/$batchId',
       );
 
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        if (data['data'] != null) {
-          final studentsList = (data['data'] as List)
-              .map((json) => StudentModel.fromJson(json))
-              .toList();
+      // Load existing attendance for this slot
+      final dateStr = DateFormat('yyyy-MM-dd').format(selectedDate);
+      final attendanceData = await ApiService.get(
+        '$kAttendanceBatchDateHour/$batchId/date/$dateStr/hour/$hour',
+      );
 
-          setState(() {
-            students = studentsList;
-            // Initialize all as present by default
-            for (var student in students) {
-              attendanceMap[student.id] = 'present';
+      if (studentsData != null && studentsData['data'] != null) {
+        // Build map of existing attendance records
+        Map<String, String> existingAttendance = {};
+        if (attendanceData != null && attendanceData['data'] != null) {
+          for (var record in attendanceData['data']) {
+            final studentId =
+                record['student_id']?['_id']?.toString() ??
+                record['student_id']?.toString() ??
+                '';
+            final status = record['attendance_status']?.toString() ?? 'present';
+            if (studentId.isNotEmpty) {
+              existingAttendance[studentId] = status;
             }
-          });
+          }
         }
+
+        setState(() {
+          students = List<Map<String, dynamic>>.from(studentsData['data']);
+          // Set attendance status from existing records, or default to 'present'
+          for (var student in students) {
+            final studentId = student['_id']?.toString() ?? '';
+            attendanceMap[studentId] =
+                existingAttendance[studentId] ?? 'present';
+          }
+        });
       }
     } catch (e) {
       print('Error loading students: $e');
@@ -104,36 +111,35 @@ class _AttendanceViewState extends State<AttendanceView> {
   }
 
   Future<void> _saveAttendance() async {
-    if (selectedSubject == null || students.isEmpty) return;
+    if (selectedSlot == null || students.isEmpty) return;
 
     setState(() => isSaving = true);
 
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('jwt_token') ?? '';
+    final batchId = selectedSlot!['batch']?['_id']?.toString() ?? '';
+    final subjectId = selectedSlot!['subject']?['_id']?.toString() ?? '';
+    final hour = selectedSlot!['hour'];
+    final semesterNumber = selectedSlot!['semester_number'] ?? 1;
 
     // Prepare bulk attendance data
     final attendanceRecords = students.map((student) {
+      final studentId = student['_id']?.toString() ?? '';
       return {
-        'student_id': student.id,
-        'subject_id': selectedSubject!.id,
-        'date': DateFormat.E('yyyy-MM-dd').format(selectedDate),
-        'hour': selectedHour,
-        'attendance_status': attendanceMap[student.id] ?? 'absent',
-        'semester_number': selectedSubject!.semesters.first,
+        'student_id': studentId,
+        'attendance_status': attendanceMap[studentId] ?? 'absent',
       };
     }).toList();
 
     try {
-      final res = await http.post(
-        Uri.parse('$kBaseUrl/attendance/mark-bulk'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({'attendance_records': attendanceRecords}),
-      );
+      final res = await ApiService.post(kAttendanceMarkBulk, {
+        'batch_id': batchId,
+        'subject_id': subjectId,
+        'date': currentDate ?? DateFormat('yyyy-MM-dd').format(DateTime.now()),
+        'hour': hour,
+        'semester_number': semesterNumber,
+        'students': attendanceRecords,
+      });
 
-      if (res.statusCode == 200 || res.statusCode == 201) {
+      if (res != null) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -141,11 +147,14 @@ class _AttendanceViewState extends State<AttendanceView> {
               backgroundColor: Colors.green,
             ),
           );
-          // Clear selection
+          // Go back to slot list
           setState(() {
+            selectedSlot = null;
             students.clear();
             attendanceMap.clear();
           });
+          // Refresh timetable to update marked status
+          _loadTimetableForDate();
         }
       } else {
         throw Exception('Failed to mark attendance');
@@ -165,6 +174,36 @@ class _AttendanceViewState extends State<AttendanceView> {
     }
   }
 
+  String _getDateDisplayText() {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final selected = DateTime(
+      selectedDate.year,
+      selectedDate.month,
+      selectedDate.day,
+    );
+    final diff = today.difference(selected).inDays;
+
+    if (diff == 0) {
+      return 'Today, ${DateFormat('MMM d').format(selectedDate)}';
+    } else if (diff == 1) {
+      return 'Yesterday, ${DateFormat('MMM d').format(selectedDate)}';
+    } else {
+      return DateFormat('EEE, MMM d').format(selectedDate);
+    }
+  }
+
+  bool _canGoToNextDay() {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final selected = DateTime(
+      selectedDate.year,
+      selectedDate.month,
+      selectedDate.day,
+    );
+    return selected.isBefore(today);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -175,6 +214,7 @@ class _AttendanceViewState extends State<AttendanceView> {
             // Header
             Container(
               padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+              width: double.infinity,
               decoration: BoxDecoration(
                 color: primaryColor,
                 borderRadius: const BorderRadius.only(
@@ -185,178 +225,152 @@ class _AttendanceViewState extends State<AttendanceView> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    "Mark Attendance",
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                      letterSpacing: 1,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    DateFormat('EEEE, MMMM d, y').format(selectedDate),
-                    style: const TextStyle(fontSize: 14, color: Colors.white70),
-                  ),
-                ],
-              ),
-            ),
-
-            // Selection Controls
-            Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                children: [
-                  // Date Selector
-                  _buildSelectorCard(
-                    icon: Icons.calendar_today_outlined,
-                    label: 'Date',
-                    value: DateFormat('MMM d, yyyy').format(selectedDate),
-                    onTap: () async {
-                      final picked = await showDatePicker(
-                        context: context,
-                        initialDate: selectedDate,
-                        firstDate: DateTime.now().subtract(
-                          const Duration(days: 30),
+                  Row(
+                    children: [
+                      if (selectedSlot != null)
+                        IconButton(
+                          onPressed: () {
+                            setState(() {
+                              selectedSlot = null;
+                              students.clear();
+                              attendanceMap.clear();
+                            });
+                          },
+                          icon: const Icon(
+                            Icons.arrow_back,
+                            color: Colors.white,
+                          ),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
                         ),
-                        lastDate: DateTime.now(),
-                      );
-                      if (picked != null) {
-                        setState(() => selectedDate = picked);
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Hour Selector
-                  _buildSelectorCard(
-                    icon: Icons.access_time_outlined,
-                    label: 'Hour/Period',
-                    value: 'Hour $selectedHour',
-                    onTap: () => _showHourPicker(),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Subject Selector
-                  _buildSelectorCard(
-                    icon: Icons.book_outlined,
-                    label: 'Subject',
-                    value: selectedSubject?.subjectName ?? 'Select Subject',
-                    onTap: () => _showSubjectPicker(),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Load Students Button
-                  if (selectedSubject != null)
-                    SizedBox(
-                      width: double.infinity,
-                      height: 48,
-                      child: ElevatedButton.icon(
-                        onPressed: isLoadingStudents ? null : _loadStudents,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: primaryColor,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                      if (selectedSlot != null) const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          selectedSlot != null
+                              ? "Mark Attendance"
+                              : "Attendance",
+                          style: const TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                            letterSpacing: 1,
                           ),
                         ),
-                        icon: const Icon(Icons.refresh),
-                        label: Text(
-                          isLoadingStudents ? 'Loading...' : 'Load Students',
-                        ),
                       ),
-                    ),
-                ],
-              ),
-            ),
-
-            // Students List
-            Expanded(
-              child: students.isEmpty
-                  ? Center(
-                      child: Text(
-                        'Select subject and load students',
-                        style: TextStyle(color: Colors.grey.shade400),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  // Date Selector Row
+                  if (selectedSlot == null)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
                       ),
-                    )
-                  : Column(
-                      children: [
-                        // Quick Actions
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 24),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: OutlinedButton(
-                                  onPressed: () {
-                                    setState(() {
-                                      for (var student in students) {
-                                        attendanceMap[student.id] = 'present';
-                                      }
-                                    });
-                                  },
-                                  child: const Text('Mark All Present'),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: OutlinedButton(
-                                  onPressed: () {
-                                    setState(() {
-                                      for (var student in students) {
-                                        attendanceMap[student.id] = 'absent';
-                                      }
-                                    });
-                                  },
-                                  child: const Text('Mark All Absent'),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-
-                        // Student List
-                        Expanded(
-                          child: ListView.builder(
-                            padding: const EdgeInsets.symmetric(horizontal: 24),
-                            itemCount: students.length,
-                            itemBuilder: (context, index) {
-                              return _buildStudentAttendanceCard(
-                                students[index],
-                              );
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          // Previous Day
+                          IconButton(
+                            onPressed: () {
+                              setState(() {
+                                selectedDate = selectedDate.subtract(
+                                  const Duration(days: 1),
+                                );
+                              });
+                              _loadTimetableForDate();
                             },
+                            icon: const Icon(
+                              Icons.chevron_left,
+                              color: Colors.white,
+                            ),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
                           ),
-                        ),
-
-                        // Save Button
-                        Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: SizedBox(
-                            width: double.infinity,
-                            height: 56,
-                            child: ElevatedButton(
-                              onPressed: isSaving ? null : _saveAttendance,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: primaryColor,
-                                foregroundColor: Colors.white,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
+                          // Date Display & Picker
+                          GestureDetector(
+                            onTap: () async {
+                              final picked = await showDatePicker(
+                                context: context,
+                                initialDate: selectedDate,
+                                firstDate: DateTime.now().subtract(
+                                  const Duration(days: 30),
                                 ),
-                              ),
-                              child: Text(
-                                isSaving ? 'Saving...' : 'Save Attendance',
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
+                                lastDate: DateTime.now(),
+                              );
+                              if (picked != null) {
+                                setState(() => selectedDate = picked);
+                                _loadTimetableForDate();
+                              }
+                            },
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.calendar_today_outlined,
+                                  color: Colors.white,
+                                  size: 18,
                                 ),
-                              ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  _getDateDisplayText(),
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                        ),
-                      ],
+                          // Next Day
+                          IconButton(
+                            onPressed: _canGoToNextDay()
+                                ? () {
+                                    setState(() {
+                                      selectedDate = selectedDate.add(
+                                        const Duration(days: 1),
+                                      );
+                                    });
+                                    _loadTimetableForDate();
+                                  }
+                                : null,
+                            icon: Icon(
+                              Icons.chevron_right,
+                              color: _canGoToNextDay()
+                                  ? Colors.white
+                                  : Colors.white38,
+                            ),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    Text(
+                      "Hour ${selectedSlot!['hour']} - ${selectedSlot!['subject']?['name'] ?? ''}",
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Colors.white70,
+                      ),
                     ),
+                ],
+              ),
+            ),
+
+            // Content
+            Expanded(
+              child: isLoadingTimetable
+                  ? Center(
+                      child: CircularProgressIndicator(color: primaryColor),
+                    )
+                  : selectedSlot == null
+                  ? _buildTimetableSlotsList()
+                  : _buildAttendanceMarkingUI(),
             ),
           ],
         ),
@@ -364,111 +378,348 @@ class _AttendanceViewState extends State<AttendanceView> {
     );
   }
 
-  Widget _buildSelectorCard({
-    required IconData icon,
-    required String label,
-    required String value,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
+  Widget _buildTimetableSlotsList() {
+    if (timetableSlots.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.event_busy_outlined,
+              size: 64,
+              color: Colors.grey.shade300,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              "No classes assigned for today",
+              style: TextStyle(fontSize: 16, color: Colors.grey.shade500),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _loadTimetableForDate,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(24),
+        itemCount: timetableSlots.length,
+        itemBuilder: (context, index) {
+          return _buildSlotCard(timetableSlots[index]);
+        },
+      ),
+    );
+  }
+
+  Widget _buildSlotCard(Map<String, dynamic> slot) {
+    final hour = slot['hour']?.toString() ?? '';
+    final subjectName =
+        slot['subject']?['name']?.toString() ?? 'Unknown Subject';
+    final batchName = slot['batch']?['name']?.toString() ?? '';
+    final courseName = slot['batch']?['course']?.toString() ?? '';
+    final totalStudents = slot['total_students'] ?? 0;
+    final markedCount = slot['marked_count'] ?? 0;
+    final isMarked = slot['is_marked'] == true;
+
+    return GestureDetector(
+      onTap: () => _loadStudentsForSlot(slot),
       child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.shade200),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isMarked ? Colors.green.shade200 : Colors.grey.shade100,
+            width: isMarked ? 2 : 1,
+          ),
         ),
         child: Row(
           children: [
-            Icon(icon, color: primaryColor, size: 24),
+            // Hour badge
+            Container(
+              height: 50,
+              width: 50,
+              decoration: BoxDecoration(
+                color: isMarked
+                    ? Colors.green.shade50
+                    : primaryColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Center(
+                child: Text(
+                  hour,
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    color: isMarked ? Colors.green : primaryColor,
+                  ),
+                ),
+              ),
+            ),
             const SizedBox(width: 16),
+            // Details
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    label,
-                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    value,
+                    subjectName,
                     style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
                       color: Colors.black87,
                     ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    batchName.isNotEmpty ? batchName : courseName,
+                    style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.people_outline,
+                        size: 14,
+                        color: Colors.grey.shade500,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '$totalStudents students',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade500,
+                        ),
+                      ),
+                      if (isMarked) ...[
+                        const SizedBox(width: 12),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.green.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            '$markedCount marked',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.green.shade700,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ],
               ),
             ),
-            Icon(Icons.chevron_right, color: Colors.grey.shade400),
+            // Arrow
+            Icon(
+              isMarked ? Icons.check_circle : Icons.chevron_right,
+              color: isMarked ? Colors.green : Colors.grey.shade400,
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildStudentAttendanceCard(StudentModel student) {
-    final status = attendanceMap[student.id] ?? 'present';
+  Widget _buildAttendanceMarkingUI() {
+    if (isLoadingStudents) {
+      return Center(child: CircularProgressIndicator(color: primaryColor));
+    }
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade100),
-      ),
-      child: Column(
-        children: [
-          Row(
+    if (students.isEmpty) {
+      return Center(
+        child: Text(
+          'No students in this batch',
+          style: TextStyle(color: Colors.grey.shade500),
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        // Quick Actions
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
+          child: Row(
             children: [
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      student.name,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    Text(
-                      student.rollNumber,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.grey.shade600,
-                      ),
-                    ),
-                  ],
+                child: OutlinedButton(
+                  onPressed: () {
+                    setState(() {
+                      for (var student in students) {
+                        final studentId = student['_id']?.toString() ?? '';
+                        attendanceMap[studentId] = 'present';
+                      }
+                    });
+                  },
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.green,
+                    side: const BorderSide(color: Colors.green),
+                  ),
+                  child: const Text('All Present'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () {
+                    setState(() {
+                      for (var student in students) {
+                        final studentId = student['_id']?.toString() ?? '';
+                        attendanceMap[studentId] = 'absent';
+                      }
+                    });
+                  },
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.red,
+                    side: const BorderSide(color: Colors.red),
+                  ),
+                  child: const Text('All Absent'),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
+        ),
+
+        // Students List
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            itemCount: students.length,
+            itemBuilder: (context, index) {
+              return _buildStudentAttendanceCard(students[index]);
+            },
+          ),
+        ),
+
+        // Save Button
+        Padding(
+          padding: const EdgeInsets.all(24),
+          child: SizedBox(
+            width: double.infinity,
+            height: 56,
+            child: ElevatedButton(
+              onPressed: isSaving ? null : _saveAttendance,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryColor,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+              child: Text(
+                isSaving ? 'Saving...' : 'Save Attendance',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStudentAttendanceCard(Map<String, dynamic> student) {
+    final studentId = student['_id']?.toString() ?? '';
+    final studentName = student['name']?.toString() ?? '';
+    final imageUrl = student['image_url']?.toString() ?? '';
+    final status = attendanceMap[studentId] ?? 'present';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade100),
+      ),
+      child: Row(
+        children: [
+          // Avatar
+          Container(
+            height: 44,
+            width: 44,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: primaryColor.withOpacity(0.1),
+            ),
+            child: ClipOval(
+              child: imageUrl.isNotEmpty
+                  ? Image.network(
+                      imageUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => Center(
+                        child: Text(
+                          studentName.isNotEmpty
+                              ? studentName[0].toUpperCase()
+                              : 'S',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            color: primaryColor,
+                          ),
+                        ),
+                      ),
+                    )
+                  : Center(
+                      child: Text(
+                        studentName.isNotEmpty
+                            ? studentName[0].toUpperCase()
+                            : 'S',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                          color: primaryColor,
+                        ),
+                      ),
+                    ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          // Name
+          Expanded(
+            child: Text(
+              studentName,
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+            ),
+          ),
+          // Status buttons
           Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              _buildStatusChip(
+              _buildStatusButton(
                 'present',
-                'Present',
+                'P',
                 status == 'present',
-                student.id,
+                studentId,
+                Colors.green,
               ),
-              const SizedBox(width: 8),
-              _buildStatusChip(
+              const SizedBox(width: 6),
+              _buildStatusButton(
                 'absent',
-                'Absent',
+                'A',
                 status == 'absent',
-                student.id,
+                studentId,
+                Colors.red,
               ),
-              const SizedBox(width: 8),
-              _buildStatusChip('late', 'Late', status == 'late', student.id),
-              const SizedBox(width: 8),
-              _buildStatusChip('leave', 'Leave', status == 'leave', student.id),
+              const SizedBox(width: 6),
+              _buildStatusButton(
+                'late',
+                'L',
+                status == 'late',
+                studentId,
+                Colors.orange,
+              ),
             ],
           ),
         ],
@@ -476,137 +727,37 @@ class _AttendanceViewState extends State<AttendanceView> {
     );
   }
 
-  Widget _buildStatusChip(
+  Widget _buildStatusButton(
     String value,
     String label,
     bool isSelected,
     String studentId,
+    Color color,
   ) {
-    return Expanded(
-      child: InkWell(
-        onTap: () {
-          setState(() {
-            attendanceMap[studentId] = value;
-          });
-        },
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          decoration: BoxDecoration(
-            color: isSelected ? primaryColor : Colors.grey.shade100,
-            borderRadius: BorderRadius.circular(8),
-          ),
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          attendanceMap[studentId] = value;
+        });
+      },
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: isSelected ? color : Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Center(
           child: Text(
             label,
-            textAlign: TextAlign.center,
             style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: isSelected ? Colors.white : Colors.grey.shade600,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: isSelected ? Colors.white : Colors.grey.shade500,
             ),
           ),
         ),
       ),
-    );
-  }
-
-  void _showHourPicker() {
-    showModalBottomSheet(
-      context: context,
-      builder: (context) {
-        return Container(
-          height: 300,
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              const Text(
-                'Select Hour/Period',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 16),
-              Expanded(
-                child: GridView.builder(
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 4,
-                    childAspectRatio: 2,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
-                  ),
-                  itemCount: 8,
-                  itemBuilder: (context, index) {
-                    final hour = index + 1;
-                    return InkWell(
-                      onTap: () {
-                        setState(() => selectedHour = hour);
-                        Navigator.pop(context);
-                      },
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: selectedHour == hour
-                              ? primaryColor
-                              : Colors.grey.shade100,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Center(
-                          child: Text(
-                            'Hour $hour',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w500,
-                              color: selectedHour == hour
-                                  ? Colors.white
-                                  : Colors.black87,
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  void _showSubjectPicker() {
-    if (subjects.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('No subjects available')));
-      return;
-    }
-
-    showModalBottomSheet(
-      context: context,
-      builder: (context) {
-        return Container(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Select Subject',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 16),
-              ...subjects.map((subject) {
-                return ListTile(
-                  title: Text(subject.subjectName),
-                  subtitle: Text(
-                    '${subject.courseName} - Sem ${subject.semesters.join(', ')}',
-                  ),
-                  selected: selectedSubject?.id == subject.id,
-                  onTap: () {
-                    setState(() => selectedSubject = subject);
-                    Navigator.pop(context);
-                  },
-                );
-              }).toList(),
-            ],
-          ),
-        );
-      },
     );
   }
 }

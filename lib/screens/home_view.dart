@@ -1,10 +1,6 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:staff_app/api_service.dart';
 import 'package:staff_app/constants.dart';
-import 'package:staff_app/models/class_model.dart';
-import 'package:staff_app/models/subject_model.dart';
 import 'package:staff_app/notifiers/user_notifier.dart';
 
 class HomeView extends StatefulWidget {
@@ -18,8 +14,8 @@ class _HomeViewState extends State<HomeView> {
   static const Color primaryColor = Color(0xFF5B8A72); // Sage green
   static const Color surfaceColor = Color(0xFFF8F6F4); // Warm off-white
 
-  ClassModel? classInCharge;
-  List<SubjectModel> subjects = [];
+  Map<String, dynamic>? classInCharge;
+  List<Map<String, dynamic>> subjects = [];
   bool isLoading = true;
 
   @override
@@ -31,45 +27,22 @@ class _HomeViewState extends State<HomeView> {
   Future<void> _loadData() async {
     setState(() => isLoading = true);
 
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('jwt_token') ?? '';
-
-    if (token.isEmpty) {
-      setState(() => isLoading = false);
-      return;
-    }
-
     try {
       // Fetch class in charge
-      final classRes = await http.get(
-        Uri.parse(kStaffMyClass),
-        headers: {'Authorization': 'Bearer $token'},
-      );
+      final classData = await ApiService.get(kStaffMyClass);
+      if (classData != null && classData['data'] != null) {
+        setState(() {
+          classInCharge = classData['data'] as Map<String, dynamic>;
+        });
+      }
+      print(classData);
 
       // Fetch subjects
-      final subjectsRes = await http.get(
-        Uri.parse(kStaffMySubjects),
-        headers: {'Authorization': 'Bearer $token'},
-      );
-
-      if (classRes.statusCode == 200) {
-        final classData = jsonDecode(classRes.body);
-        if (classData['data'] != null) {
-          setState(() {
-            classInCharge = ClassModel.fromJson(classData['data']);
-          });
-        }
-      }
-
-      if (subjectsRes.statusCode == 200) {
-        final subjectsData = jsonDecode(subjectsRes.body);
-        if (subjectsData['data'] != null) {
-          setState(() {
-            subjects = (subjectsData['data'] as List)
-                .map((json) => SubjectModel.fromJson(json))
-                .toList();
-          });
-        }
+      final subjectsData = await ApiService.get(kStaffMySubjects);
+      if (subjectsData != null && subjectsData['data'] != null) {
+        setState(() {
+          subjects = List<Map<String, dynamic>>.from(subjectsData['data']);
+        });
       }
     } catch (e) {
       print('Error loading home data: $e');
@@ -90,10 +63,11 @@ class _HomeViewState extends State<HomeView> {
                 child: SingleChildScrollView(
                   physics: const AlwaysScrollableScrollPhysics(),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       // Header
                       Container(
+                        width: double.infinity,
                         padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
                         decoration: BoxDecoration(
                           color: primaryColor,
@@ -195,7 +169,13 @@ class _HomeViewState extends State<HomeView> {
     );
   }
 
-  Widget _buildClassCard(ClassModel classData) {
+  Widget _buildClassCard(Map<String, dynamic> classData) {
+    final courseName = classData['course_id']?['name']?.toString() ?? '';
+    final startYear = classData['start_year']?.toString() ?? '';
+    final endYear = classData['end_year']?.toString() ?? '';
+    final strength = classData['strength']?.toString() ?? '0';
+    final currentSemester = classData['current_semester']?.toString() ?? '1';
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -215,20 +195,8 @@ class _HomeViewState extends State<HomeView> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      classData.batchName,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.black87,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      classData.courseName,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey.shade600,
-                      ),
+                      courseName,
+                      style: TextStyle(fontSize: 14, color: Colors.black),
                     ),
                   ],
                 ),
@@ -238,17 +206,11 @@ class _HomeViewState extends State<HomeView> {
           const SizedBox(height: 16),
           Row(
             children: [
-              _infoChip(
-                Icons.calendar_today_outlined,
-                "${classData.startYear} - ${classData.endYear}",
-              ),
+              _infoChip(Icons.calendar_today_outlined, "$startYear - $endYear"),
               const SizedBox(width: 12),
-              _infoChip(Icons.people_outline, "${classData.strength} students"),
+              _infoChip(Icons.people_outline, "$strength students"),
               const SizedBox(width: 12),
-              _infoChip(
-                Icons.book_outlined,
-                "Sem ${classData.currentSemester}",
-              ),
+              _infoChip(Icons.book_outlined, "Sem $currentSemester"),
             ],
           ),
         ],
@@ -256,7 +218,11 @@ class _HomeViewState extends State<HomeView> {
     );
   }
 
-  Widget _buildSubjectCard(SubjectModel subject) {
+  Widget _buildSubjectCard(Map<String, dynamic> subject) {
+    final subjectName = subject['subject_name']?.toString() ?? '';
+    final courseName = subject['course_id']?['name']?.toString() ?? '';
+    final semesters = (subject['semesters'] as List?)?.join(', ') ?? '';
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
@@ -274,7 +240,7 @@ class _HomeViewState extends State<HomeView> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  subject.subjectName,
+                  subjectName,
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w500,
@@ -283,7 +249,7 @@ class _HomeViewState extends State<HomeView> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  subject.courseName,
+                  courseName,
                   style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
                 ),
               ],
@@ -296,7 +262,7 @@ class _HomeViewState extends State<HomeView> {
               borderRadius: BorderRadius.circular(12),
             ),
             child: Text(
-              "Sem ${subject.semesters.join(', ')}",
+              "Sem $semesters",
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
