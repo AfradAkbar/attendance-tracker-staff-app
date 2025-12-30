@@ -71,7 +71,7 @@ class _AppShellState extends State<AppShell> {
 
   Future<void> _loadNotifications() async {
     try {
-      final data = await ApiService.get(kStaffNotifications);
+      final data = await ApiService.get(kNotifications);
       if (data != null && data['data'] != null) {
         final notifications = (data['data'] as List)
             .map(

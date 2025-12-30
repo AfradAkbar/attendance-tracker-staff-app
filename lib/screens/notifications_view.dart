@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:staff_app/api_service.dart';
 import 'package:staff_app/constants.dart';
 import 'package:staff_app/notifiers/notifications_notifier.dart';
+import 'package:staff_app/notifiers/user_notifier.dart';
 
 class NotificationsView extends StatefulWidget {
   const NotificationsView({super.key});
@@ -30,7 +31,7 @@ class _NotificationsViewState extends State<NotificationsView> {
     setState(() => isLoading = true);
 
     try {
-      final data = await ApiService.get(kStaffNotifications);
+      final data = await ApiService.get(kNotifications);
       if (data != null && data['data'] != null) {
         final notifications = (data['data'] as List)
             .map(
@@ -49,7 +50,7 @@ class _NotificationsViewState extends State<NotificationsView> {
 
   Future<void> _markAsRead(String notificationId) async {
     try {
-      await ApiService.put('$kStaffNotifications/$notificationId/read');
+      await ApiService.put('$kNotifications/$notificationId/read');
       notificationsNotifier.markAsRead(notificationId);
     } catch (e) {
       print('Error marking notification as read: $e');
@@ -125,27 +126,56 @@ class _NotificationsViewState extends State<NotificationsView> {
                   final unreadCount = notifications
                       .where((n) => !n.isRead)
                       .length;
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  return Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
-                        "Notifications",
-                        style: TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                          letterSpacing: 1,
-                        ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            "Notifications",
+                            style: TextStyle(
+                              fontSize: 28,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                              letterSpacing: 1,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            unreadCount > 0
+                                ? "$unreadCount unread"
+                                : "All caught up!",
+                            style: const TextStyle(
+                              fontSize: 14,
+                              color: Colors.white70,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        unreadCount > 0
-                            ? "$unreadCount unread"
-                            : "All caught up!",
-                        style: const TextStyle(
-                          fontSize: 14,
-                          color: Colors.white70,
-                        ),
+                      // HOD Send Notification Button
+                      ValueListenableBuilder<UserModel?>(
+                        valueListenable: userNotifier,
+                        builder: (context, user, child) {
+                          if (user?.role == 'hod') {
+                            return Container(
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: IconButton(
+                                onPressed: () => _showSendNotificationDialog(),
+                                icon: const Icon(
+                                  Icons.add_circle_outline,
+                                  color: Colors.white,
+                                  size: 28,
+                                ),
+                                tooltip: 'Send Notification',
+                              ),
+                            );
+                          }
+                          return const SizedBox.shrink();
+                        },
                       ),
                     ],
                   );
@@ -204,6 +234,18 @@ class _NotificationsViewState extends State<NotificationsView> {
         ),
       ),
     );
+  }
+
+  void _showSendNotificationDialog() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => const _SendNotificationSheet(),
+    ).then((_) {
+      // Refresh notifications after sending
+      _refreshNotifications();
+    });
   }
 
   Widget _buildNotificationCard(NotificationModel notification) {
@@ -379,6 +421,411 @@ class _NotificationsViewState extends State<NotificationsView> {
           ),
         );
       },
+    );
+  }
+}
+
+// Send Notification Sheet for HOD
+class _SendNotificationSheet extends StatefulWidget {
+  const _SendNotificationSheet();
+
+  @override
+  State<_SendNotificationSheet> createState() => _SendNotificationSheetState();
+}
+
+class _SendNotificationSheetState extends State<_SendNotificationSheet> {
+  static const Color primaryColor = Color(0xFF5B8A72);
+
+  final _titleController = TextEditingController();
+  final _messageController = TextEditingController();
+
+  String _selectedAudience = 'students';
+  String? _selectedBatchId;
+  List<Map<String, dynamic>> _batches = [];
+  bool _isLoadingBatches = false;
+  bool _isSending = false;
+
+  final List<Map<String, dynamic>> _audienceOptions = [
+    {'value': 'students', 'label': 'Students', 'icon': Icons.school_outlined},
+    {'value': 'parents', 'label': 'Parents', 'icon': Icons.family_restroom},
+    {
+      'value': 'all',
+      'label': 'Both (Students & Parents)',
+      'icon': Icons.groups_outlined,
+    },
+    {
+      'value': 'specific_batch',
+      'label': 'Specific Batch',
+      'icon': Icons.class_outlined,
+    },
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBatches();
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _messageController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadBatches() async {
+    setState(() => _isLoadingBatches = true);
+    try {
+      print('Loading HOD batches from: $kHodBatches');
+      final data = await ApiService.get(kHodBatches);
+      print('HOD batches response: $data');
+      if (data != null && data['data'] != null) {
+        setState(() {
+          _batches = List<Map<String, dynamic>>.from(data['data']);
+          print('Loaded ${_batches.length} batches: $_batches');
+        });
+      } else {
+        print('No batches data in response');
+      }
+    } catch (e) {
+      print('Error loading batches: $e');
+    } finally {
+      setState(() => _isLoadingBatches = false);
+    }
+  }
+
+  Future<void> _sendNotification() async {
+    if (_titleController.text.isEmpty || _messageController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please fill in all fields')),
+      );
+      return;
+    }
+
+    if (_selectedAudience == 'specific_batch' && _selectedBatchId == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Please select a batch')));
+      return;
+    }
+
+    setState(() => _isSending = true);
+
+    try {
+      final body = {
+        'title': _titleController.text,
+        'message': _messageController.text,
+        'target_audience': _selectedAudience,
+        'type': 'general',
+      };
+
+      if (_selectedAudience == 'specific_batch') {
+        body['batch_id'] = _selectedBatchId!;
+      }
+
+      final response = await ApiService.post(kHodSendNotification, body);
+
+      if (response != null && response['success'] == true) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Notification sent successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              response?['message'] ?? 'Failed to send notification',
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+      );
+    } finally {
+      setState(() => _isSending = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.only(
+        left: 24,
+        right: 24,
+        top: 24,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+      ),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(24),
+          topRight: Radius.circular(24),
+        ),
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Handle
+            Center(
+              child: Container(
+                height: 4,
+                width: 40,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // Title
+            Row(
+              children: [
+                Container(
+                  height: 40,
+                  width: 40,
+                  decoration: BoxDecoration(
+                    color: primaryColor.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.send_rounded,
+                    color: primaryColor,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Text(
+                  'Send Notification',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+
+            // Audience Selection
+            const Text(
+              'Send To',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _audienceOptions.map((option) {
+                final isSelected = _selectedAudience == option['value'];
+                return GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _selectedAudience = option['value'] as String;
+                      if (_selectedAudience != 'specific_batch') {
+                        _selectedBatchId = null;
+                      }
+                    });
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isSelected ? primaryColor : Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          option['icon'] as IconData,
+                          size: 18,
+                          color: isSelected
+                              ? Colors.white
+                              : Colors.grey.shade600,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          option['label'] as String,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: isSelected
+                                ? Colors.white
+                                : Colors.grey.shade700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+
+            // Batch Dropdown (if specific_batch selected)
+            if (_selectedAudience == 'specific_batch') ...[
+              const SizedBox(height: 16),
+              const Text(
+                'Select Batch',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 8),
+              _isLoadingBatches
+                  ? const Center(child: CircularProgressIndicator())
+                  : _batches.isEmpty
+                  ? Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.info_outline,
+                            color: Colors.orange.shade700,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'No batches found in your department',
+                              style: TextStyle(
+                                color: Colors.orange.shade700,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _selectedBatchId,
+                          isExpanded: true,
+                          hint: const Text('Choose a batch'),
+                          items: _batches.map((batch) {
+                            return DropdownMenuItem(
+                              value: batch['_id'] as String,
+                              child: Text(batch['name'] ?? 'Unknown'),
+                            );
+                          }).toList(),
+                          onChanged: (value) {
+                            setState(() => _selectedBatchId = value);
+                          },
+                        ),
+                      ),
+                    ),
+            ],
+
+            const SizedBox(height: 20),
+
+            // Title Field
+            const Text(
+              'Title',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _titleController,
+              decoration: InputDecoration(
+                hintText: 'Notification title',
+                filled: true,
+                fillColor: Colors.grey.shade100,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.all(16),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // Message Field
+            const Text(
+              'Message',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _messageController,
+              maxLines: 4,
+              decoration: InputDecoration(
+                hintText: 'Write your message here...',
+                filled: true,
+                fillColor: Colors.grey.shade100,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.all(16),
+              ),
+            ),
+
+            const SizedBox(height: 24),
+
+            // Send Button
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _isSending ? null : _sendNotification,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryColor,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: _isSending
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Text(
+                        'Send Notification',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
