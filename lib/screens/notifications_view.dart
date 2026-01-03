@@ -4,6 +4,7 @@ import 'package:staff_app/api_service.dart';
 import 'package:staff_app/constants.dart';
 import 'package:staff_app/notifiers/notifications_notifier.dart';
 import 'package:staff_app/notifiers/user_notifier.dart';
+import 'package:staff_app/screens/attendance_requests_view.dart';
 
 class NotificationsView extends StatefulWidget {
   const NotificationsView({super.key});
@@ -153,29 +154,52 @@ class _NotificationsViewState extends State<NotificationsView> {
                           ),
                         ],
                       ),
-                      // HOD Send Notification Button
-                      ValueListenableBuilder<UserModel?>(
-                        valueListenable: userNotifier,
-                        builder: (context, user, child) {
-                          if (user?.role == 'hod') {
-                            return Container(
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(12),
+                      // Action buttons row
+                      Row(
+                        children: [
+                          // Attendance Requests Button
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: IconButton(
+                              onPressed: () => _showAttendanceRequests(),
+                              icon: const Icon(
+                                Icons.pending_actions,
+                                color: Colors.white,
+                                size: 26,
                               ),
-                              child: IconButton(
-                                onPressed: () => _showSendNotificationDialog(),
-                                icon: const Icon(
-                                  Icons.add_circle_outline,
-                                  color: Colors.white,
-                                  size: 28,
-                                ),
-                                tooltip: 'Send Notification',
-                              ),
-                            );
-                          }
-                          return const SizedBox.shrink();
-                        },
+                              tooltip: 'Attendance Requests',
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          // HOD Send Notification Button
+                          ValueListenableBuilder<UserModel?>(
+                            valueListenable: userNotifier,
+                            builder: (context, user, child) {
+                              if (user?.role == 'hod') {
+                                return Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: IconButton(
+                                    onPressed: () =>
+                                        _showSendNotificationDialog(),
+                                    icon: const Icon(
+                                      Icons.add_circle_outline,
+                                      color: Colors.white,
+                                      size: 28,
+                                    ),
+                                    tooltip: 'Send Notification',
+                                  ),
+                                );
+                              }
+                              return const SizedBox.shrink();
+                            },
+                          ),
+                        ],
                       ),
                     ],
                   );
@@ -233,6 +257,13 @@ class _NotificationsViewState extends State<NotificationsView> {
           ],
         ),
       ),
+    );
+  }
+
+  void _showAttendanceRequests() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const AttendanceRequestsView()),
     );
   }
 

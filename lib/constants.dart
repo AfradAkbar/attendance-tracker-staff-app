@@ -17,3 +17,6 @@ const kNotifications = '$kBaseUrl/notification';
 // HOD notification endpoints
 const kHodSendNotification = '$kBaseUrl/staff/hod/notifications';
 const kHodBatches = '$kBaseUrl/staff/hod/batches';
+
+// Attendance requests (face verification failures)
+const kAttendanceRequests = '$kBaseUrl/staff/attendance-requests';
