@@ -1,4 +1,4 @@
-const kBaseUrl = 'http://192.168.1.7:3000/api';
+const kBaseUrl = 'http://192.168.1.5:3000/api';
 
 const kStaffLoginRoute = '$kBaseUrl/staff/login';
 const kStaffProfile = '$kBaseUrl/staff/profile';
@@ -20,3 +20,8 @@ const kHodBatches = '$kBaseUrl/staff/hod/batches';
 
 // Attendance requests (face verification failures)
 const kAttendanceRequests = '$kBaseUrl/staff/attendance-requests';
+
+// Pending student approval requests
+const kPendingStudents = '$kBaseUrl/staff/pending-students';
+const kUpdateStudentStatus =
+    '$kBaseUrl/staff/students'; // Append /:student_id/status

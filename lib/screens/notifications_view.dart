@@ -5,6 +5,7 @@ import 'package:staff_app/constants.dart';
 import 'package:staff_app/notifiers/notifications_notifier.dart';
 import 'package:staff_app/notifiers/user_notifier.dart';
 import 'package:staff_app/screens/attendance_requests_view.dart';
+import 'package:staff_app/screens/student_approval_view.dart';
 
 class NotificationsView extends StatefulWidget {
   const NotificationsView({super.key});
@@ -18,6 +19,7 @@ class _NotificationsViewState extends State<NotificationsView> {
   static const Color surfaceColor = Color(0xFFF8F6F4);
 
   bool isLoading = false;
+  int _pendingStudentCount = 0;
 
   @override
   void initState() {
@@ -25,6 +27,19 @@ class _NotificationsViewState extends State<NotificationsView> {
     // Refresh on view if notifications are empty
     if (notificationsNotifier.value.isEmpty) {
       _refreshNotifications();
+    }
+    _fetchPendingStudentCount();
+  }
+
+  Future<void> _fetchPendingStudentCount() async {
+    try {
+      final response = await ApiService.get(kPendingStudents);
+      if (response != null && response['success'] == true) {
+        final data = response['data'] as List? ?? [];
+        setState(() => _pendingStudentCount = data.length);
+      }
+    } catch (e) {
+      print('Error fetching pending student count: $e');
     }
   }
 
@@ -157,6 +172,54 @@ class _NotificationsViewState extends State<NotificationsView> {
                       // Action buttons row
                       Row(
                         children: [
+                          // Student Approvals Button with badge
+                          Stack(
+                            children: [
+                              Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: IconButton(
+                                  onPressed: () => _showStudentApprovals(),
+                                  icon: const Icon(
+                                    Icons.person_add_alt_1,
+                                    color: Colors.white,
+                                    size: 26,
+                                  ),
+                                  tooltip: 'Student Approvals',
+                                ),
+                              ),
+                              if (_pendingStudentCount > 0)
+                                Positioned(
+                                  right: 0,
+                                  top: 0,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(4),
+                                    decoration: const BoxDecoration(
+                                      color: Colors.red,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    constraints: const BoxConstraints(
+                                      minWidth: 18,
+                                      minHeight: 18,
+                                    ),
+                                    child: Text(
+                                      _pendingStudentCount > 9
+                                          ? '9+'
+                                          : '$_pendingStudentCount',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(width: 8),
                           // Attendance Requests Button
                           Container(
                             decoration: BoxDecoration(
@@ -258,6 +321,16 @@ class _NotificationsViewState extends State<NotificationsView> {
         ),
       ),
     );
+  }
+
+  void _showStudentApprovals() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const StudentApprovalView()),
+    ).then((_) {
+      // Refresh pending count when returning
+      _fetchPendingStudentCount();
+    });
   }
 
   void _showAttendanceRequests() {
