@@ -1,8 +1,11 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:staff_app/api_service.dart';
+import 'package:staff_app/constants.dart';
 import 'package:staff_app/screens/login_screen.dart';
-import 'package:staff_app/screens/profile_details_screen.dart';
 import 'package:staff_app/notifiers/user_notifier.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 class ProfileView extends StatefulWidget {
   const ProfileView({super.key});
@@ -13,8 +16,70 @@ class ProfileView extends StatefulWidget {
 
 class _ProfileViewState extends State<ProfileView> {
   // Soft color palette
-  static const Color primaryColor = Color(0xFF5B8A72); // Sage green
-  static const Color surfaceColor = Color(0xFFF8F6F4); // Warm off-white
+  static const Color primaryColor = Color(0xFF5B8A72);
+  static const Color surfaceColor = Color(0xFFF8F6F4);
+
+  bool _isUploading = false;
+  final ImagePicker _picker = ImagePicker();
+
+  Future<void> _pickAndUploadPhoto() async {
+    try {
+      final XFile? image = await _picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 512,
+        maxHeight: 512,
+        imageQuality: 80,
+      );
+
+      if (image == null) return;
+
+      setState(() => _isUploading = true);
+
+      // Convert to base64
+      final bytes = await File(image.path).readAsBytes();
+      final base64Image = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+
+      // Upload to server
+      final response = await ApiService.put(kStaffProfilePhoto, {
+        'profile_image': base64Image,
+      });
+
+      if (response != null && response['success'] == true) {
+        // Update user notifier with new data
+        if (response['user'] != null) {
+          userNotifier.value = UserModel.fromJson(response['user']);
+        }
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Profile photo updated successfully'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(response?['message'] ?? 'Failed to update photo'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isUploading = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -61,59 +126,113 @@ class _ProfileViewState extends State<ProfileView> {
                                 letterSpacing: 1,
                               ),
                             ),
-                            Row(
-                              children: [
-                                // Edit button
-                                IconButton(
-                                  onPressed: () async {
-                                    await Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (context) =>
-                                            ProfileDetailsScreen(
-                                              userData: userData.toJson(),
-                                            ),
-                                      ),
-                                    );
-                                  },
-                                  icon: const Icon(
-                                    Icons.edit_outlined,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                                // Logout button
-                                IconButton(
-                                  onPressed: () => showLogoutModal(context),
-                                  icon: const Icon(
-                                    Icons.logout_rounded,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ],
+                            // Logout button only
+                            IconButton(
+                              onPressed: () => showLogoutModal(context),
+                              icon: const Icon(
+                                Icons.logout_rounded,
+                                color: Colors.white,
+                              ),
                             ),
                           ],
                         ),
                         Center(
                           child: Column(
                             children: [
-                              Container(
-                                height: 100,
-                                width: 100,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: Colors.grey.shade200,
-                                  border: Border.all(
-                                    color: Colors.grey.shade200,
-                                    width: 3,
-                                  ),
-                                ),
-                                child: Icon(
-                                  Icons.person_rounded,
-                                  size: 48,
-                                  color: Colors.grey.shade400,
+                              // Profile photo with edit capability
+                              GestureDetector(
+                                onTap: _isUploading
+                                    ? null
+                                    : _pickAndUploadPhoto,
+                                child: Stack(
+                                  children: [
+                                    Container(
+                                      height: 100,
+                                      width: 100,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: Colors.grey.shade200,
+                                        border: Border.all(
+                                          color: Colors.grey.shade200,
+                                          width: 3,
+                                        ),
+                                      ),
+                                      child: ClipOval(
+                                        child: _isUploading
+                                            ? Center(
+                                                child:
+                                                    CircularProgressIndicator(
+                                                      color: primaryColor,
+                                                      strokeWidth: 2,
+                                                    ),
+                                              )
+                                            : userData.profileImageUrl !=
+                                                      null &&
+                                                  userData
+                                                      .profileImageUrl!
+                                                      .isNotEmpty
+                                            ? Image.network(
+                                                userData.profileImageUrl!,
+                                                fit: BoxFit.cover,
+                                                width: 100,
+                                                height: 100,
+                                                errorBuilder:
+                                                    (
+                                                      context,
+                                                      error,
+                                                      stackTrace,
+                                                    ) => Icon(
+                                                      Icons.person_rounded,
+                                                      size: 48,
+                                                      color:
+                                                          Colors.grey.shade400,
+                                                    ),
+                                              )
+                                            : Icon(
+                                                Icons.person_rounded,
+                                                size: 48,
+                                                color: Colors.grey.shade400,
+                                              ),
+                                      ),
+                                    ),
+                                    // Camera icon overlay
+                                    Positioned(
+                                      bottom: 0,
+                                      right: 0,
+                                      child: Container(
+                                        padding: const EdgeInsets.all(6),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          shape: BoxShape.circle,
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black.withOpacity(
+                                                0.1,
+                                              ),
+                                              blurRadius: 4,
+                                              offset: const Offset(0, 2),
+                                            ),
+                                          ],
+                                        ),
+                                        child: Icon(
+                                          Icons.camera_alt,
+                                          size: 18,
+                                          color: primaryColor,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                              const SizedBox(height: 16),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Tap to change photo',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.white.withOpacity(0.7),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
                               if (userData.name.isNotEmpty)
                                 Text(
                                   userData.name,
@@ -270,7 +389,7 @@ class _ProfileViewState extends State<ProfileView> {
 void showLogoutModal(BuildContext context) {
   showDialog(
     context: context,
-    barrierDismissible: false, // prevent closing by tapping outside
+    barrierDismissible: false,
     builder: (context) {
       return Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -279,36 +398,25 @@ void showLogoutModal(BuildContext context) {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Title
               const Text(
                 "Logout",
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
               ),
-
               const SizedBox(height: 12),
-
-              // Message
               const Text(
                 "Are you sure you want to log out?",
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 16, color: Colors.black54),
               ),
-
               const SizedBox(height: 24),
-
-              // Buttons
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  // Cancel button
                   TextButton(
                     onPressed: () => Navigator.pop(context),
                     child: const Text("Cancel", style: TextStyle(fontSize: 16)),
                   ),
-
                   const SizedBox(width: 8),
-
-                  // Logout button
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.red,
@@ -341,17 +449,3 @@ void showLogoutModal(BuildContext context) {
     },
   );
 }
-
-
-// class _ProfileImage extends StatelessWidget {
-//   const _ProfileImage({super.key, required this.userData});
-
-//   final Map<String, dynamic> userData;
-
-//   @override
-//   Widget build(BuildContext context) {
-//     return
-//   }
-// }
-
-

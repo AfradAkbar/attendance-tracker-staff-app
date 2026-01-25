@@ -1,7 +1,8 @@
-const kBaseUrl = 'http://192.168.1.5:3000/api';
+const kBaseUrl = 'http://192.168.1.4:3000/api';
 
 const kStaffLoginRoute = '$kBaseUrl/staff/login';
 const kStaffProfile = '$kBaseUrl/staff/profile';
+const kStaffProfilePhoto = '$kBaseUrl/staff/profile/photo';
 const kStaffMyClass = '$kBaseUrl/staff/my-class';
 const kStaffMySubjects = '$kBaseUrl/staff/my-subjects';
 const kStaffMyStudents = '$kBaseUrl/staff/my-students';
@@ -25,3 +26,5 @@ const kAttendanceRequests = '$kBaseUrl/staff/attendance-requests';
 const kPendingStudents = '$kBaseUrl/staff/pending-students';
 const kUpdateStudentStatus =
     '$kBaseUrl/staff/students'; // Append /:student_id/status
+const kUpdateStudentRegisterNumber =
+    '$kBaseUrl/staff/students'; // Append /:student_id/register-number

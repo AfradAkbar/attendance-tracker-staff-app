@@ -7,6 +7,7 @@ class UserModel {
   final String phoneNumber;
   final String role;
   final String departmentId;
+  final String? profileImageUrl;
 
   UserModel({
     required this.id,
@@ -15,6 +16,7 @@ class UserModel {
     required this.phoneNumber,
     required this.role,
     required this.departmentId,
+    this.profileImageUrl,
   });
 
   // Factory constructor to create UserModel from API response
@@ -26,6 +28,7 @@ class UserModel {
       phoneNumber: json['phone_number']?.toString() ?? '',
       role: json['role']?.toString() ?? '',
       departmentId: json['department_id']?.toString() ?? '',
+      profileImageUrl: json['profile_image_url']?.toString(),
     );
   }
 
@@ -38,6 +41,7 @@ class UserModel {
       'phone_number': phoneNumber,
       'role': role,
       'department_id': departmentId,
+      'profile_image_url': profileImageUrl,
     };
   }
 }

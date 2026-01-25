@@ -54,13 +54,132 @@ class _StudentsViewState extends State<StudentsView> {
           final name = student['name']?.toString().toLowerCase() ?? '';
           final rollNumber =
               student['roll_number']?.toString().toLowerCase() ?? '';
+          final registerNumber =
+              student['register_number']?.toString().toLowerCase() ?? '';
           final email = student['email']?.toString().toLowerCase() ?? '';
           return name.contains(query.toLowerCase()) ||
               rollNumber.contains(query.toLowerCase()) ||
+              registerNumber.contains(query.toLowerCase()) ||
               email.contains(query.toLowerCase());
         }).toList();
       }
     });
+  }
+
+  Future<void> _updateRegisterNumber(
+    String studentId,
+    String registerNumber,
+  ) async {
+    try {
+      final response = await ApiService.put(
+        '$kUpdateStudentRegisterNumber/$studentId/register-number',
+        {'register_number': registerNumber},
+      );
+
+      if (response != null && response['success'] == true) {
+        // Update local state
+        setState(() {
+          final index = students.indexWhere((s) => s['_id'] == studentId);
+          if (index != -1) {
+            students[index]['register_number'] = registerNumber;
+          }
+          final filteredIndex = filteredStudents.indexWhere(
+            (s) => s['_id'] == studentId,
+          );
+          if (filteredIndex != -1) {
+            filteredStudents[filteredIndex]['register_number'] = registerNumber;
+          }
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Register number updated successfully'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                response?['message'] ?? 'Failed to update register number',
+              ),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  void _showEditRegisterNumberDialog(Map<String, dynamic> student) {
+    final controller = TextEditingController(
+      text: student['register_number']?.toString() ?? '',
+    );
+    final formKey = GlobalKey<FormState>();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit Register Number'),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Update register number for ${student['name']}',
+                style: TextStyle(color: Colors.grey.shade600),
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: controller,
+                decoration: InputDecoration(
+                  labelText: 'Register Number',
+                  hintText: 'e.g., 2024CS001',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  prefixIcon: const Icon(Icons.badge_outlined),
+                ),
+                textCapitalization: TextCapitalization.characters,
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Register number is required';
+                  }
+                  return null;
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (formKey.currentState!.validate()) {
+                Navigator.pop(context);
+                _updateRegisterNumber(student['_id'], controller.text.trim());
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: primaryColor),
+            child: const Text('Save', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -183,6 +302,7 @@ class _StudentsViewState extends State<StudentsView> {
     final email = student['email']?.toString() ?? '';
     final phone = student['phone_number']?.toString() ?? '';
     final imageUrl = student['image_url']?.toString() ?? '';
+    final registerNumber = student['register_number']?.toString() ?? '';
 
     // Batch and course details
     final batchData = student['batch_id'] as Map<String, dynamic>?;
@@ -266,6 +386,27 @@ class _StudentsViewState extends State<StudentsView> {
                         fontWeight: FontWeight.w500,
                       ),
                     ),
+                  if (registerNumber.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        registerNumber,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Colors.blue,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 4),
                   Row(
                     children: [
@@ -319,6 +460,7 @@ class _StudentsViewState extends State<StudentsView> {
     final dob = student['dob']?.toString() ?? '';
     final address = student['address']?.toString() ?? '';
     final imageUrl = student['image_url']?.toString() ?? '';
+    final registerNumber = student['register_number']?.toString() ?? '';
 
     // Batch and course details
     final batchData = student['batch_id'] as Map<String, dynamic>?;
@@ -423,6 +565,64 @@ class _StudentsViewState extends State<StudentsView> {
                         fontWeight: FontWeight.w500,
                       ),
                     ),
+                  const SizedBox(height: 12),
+                  // Register number with edit button
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.pop(context);
+                      _showEditRegisterNumberDialog(student);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: registerNumber.isNotEmpty
+                            ? Colors.blue.withOpacity(0.1)
+                            : Colors.orange.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: registerNumber.isNotEmpty
+                              ? Colors.blue.withOpacity(0.3)
+                              : Colors.orange.withOpacity(0.3),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.badge_outlined,
+                            size: 16,
+                            color: registerNumber.isNotEmpty
+                                ? Colors.blue
+                                : Colors.orange,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            registerNumber.isNotEmpty
+                                ? registerNumber
+                                : 'No Register Number',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: registerNumber.isNotEmpty
+                                  ? Colors.blue
+                                  : Colors.orange,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Icon(
+                            Icons.edit_outlined,
+                            size: 14,
+                            color: registerNumber.isNotEmpty
+                                ? Colors.blue
+                                : Colors.orange,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 24),
                   // Details grid
                   _buildDetailTile(Icons.email_outlined, 'Email', email),
