@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:animated_bottom_navigation_bar/animated_bottom_navigation_bar.dart';
 import 'package:flutter/material.dart';
@@ -21,9 +22,13 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   int _bottomNavIndex = 0;
+  Timer? _notificationPollingTimer;
 
   Map<String, dynamic>? userData;
   bool isLoading = true;
+
+  // Polling interval in seconds
+  static const int _pollingIntervalSeconds = 5;
 
   // Titles for each tab
   final titles = ['Home', 'Attendance', 'Students', 'Notifications', 'Profile'];
@@ -42,6 +47,20 @@ class _AppShellState extends State<AppShell> {
     super.initState();
     _loadProfile();
     _loadNotifications();
+    _startNotificationPolling();
+  }
+
+  @override
+  void dispose() {
+    _notificationPollingTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startNotificationPolling() {
+    _notificationPollingTimer = Timer.periodic(
+      const Duration(seconds: _pollingIntervalSeconds),
+      (timer) => _loadNotifications(),
+    );
   }
 
   Future<void> _loadProfile() async {
