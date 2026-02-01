@@ -413,10 +413,40 @@ class _AttendanceViewState extends State<AttendanceView> {
 
   Widget _buildSlotCard(Map<String, dynamic> slot) {
     final hour = slot['hour']?.toString() ?? '';
-    final subjectName =
-        slot['subject']?['name']?.toString() ?? 'Unknown Subject';
-    final batchName = slot['batch']?['name']?.toString() ?? '';
-    final courseName = slot['batch']?['course']?.toString() ?? '';
+    // Handle both 'name' and 'subject_name' field names
+    final subjectData = slot['subject'];
+    String subjectName = 'Unknown Subject';
+    if (subjectData is Map) {
+      subjectName =
+          subjectData['name']?.toString() ??
+          subjectData['subject_name']?.toString() ??
+          'Unknown Subject';
+      // Filter out "Unknown" from API if it exists
+      if (subjectName == 'Unknown') {
+        subjectName = subjectData['code']?.toString() ?? 'Unknown Subject';
+      }
+    }
+
+    // Get batch info
+    final batchData = slot['batch'];
+    String batchDisplay = '';
+    if (batchData is Map) {
+      final courseName = batchData['course']?.toString() ?? '';
+      final batchName = batchData['name']?.toString() ?? '';
+      final startYear = batchData['start_year']?.toString() ?? '';
+      final endYear = batchData['end_year']?.toString() ?? '';
+
+      if (batchName.isNotEmpty) {
+        batchDisplay = batchName;
+      } else if (courseName.isNotEmpty) {
+        if (startYear.isNotEmpty && endYear.isNotEmpty) {
+          batchDisplay = '$courseName ($startYear-$endYear)';
+        } else {
+          batchDisplay = courseName;
+        }
+      }
+    }
+
     final totalStudents = slot['total_students'] ?? 0;
     final markedCount = slot['marked_count'] ?? 0;
     final isMarked = slot['is_marked'] == true;
@@ -473,7 +503,7 @@ class _AttendanceViewState extends State<AttendanceView> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    batchName.isNotEmpty ? batchName : courseName,
+                    batchDisplay,
                     style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
                   ),
                   const SizedBox(height: 4),

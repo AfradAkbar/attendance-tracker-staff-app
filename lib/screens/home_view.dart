@@ -25,11 +25,13 @@ class _HomeViewState extends State<HomeView> {
   }
 
   Future<void> _loadData() async {
+    if (!mounted) return;
     setState(() => isLoading = true);
 
     try {
       // Fetch class in charge
       final classData = await ApiService.get(kStaffMyClass);
+      if (!mounted) return;
       if (classData != null && classData['data'] != null) {
         setState(() {
           classInCharge = classData['data'] as Map<String, dynamic>;
@@ -39,6 +41,7 @@ class _HomeViewState extends State<HomeView> {
 
       // Fetch subjects
       final subjectsData = await ApiService.get(kStaffMySubjects);
+      if (!mounted) return;
       if (subjectsData != null && subjectsData['data'] != null) {
         setState(() {
           subjects = List<Map<String, dynamic>>.from(subjectsData['data']);
@@ -47,7 +50,9 @@ class _HomeViewState extends State<HomeView> {
     } catch (e) {
       print('Error loading home data: $e');
     } finally {
-      setState(() => isLoading = false);
+      if (mounted) {
+        setState(() => isLoading = false);
+      }
     }
   }
 
@@ -220,8 +225,30 @@ class _HomeViewState extends State<HomeView> {
 
   Widget _buildSubjectCard(Map<String, dynamic> subject) {
     final subjectName = subject['subject_name']?.toString() ?? '';
-    final courseName = subject['course_id']?['name']?.toString() ?? '';
-    final semesters = (subject['semesters'] as List?)?.join(', ') ?? '';
+
+    // Get taught_in batches info - use Set to deduplicate
+    final taughtIn = subject['taught_in'] as List? ?? [];
+    Set<String> batchInfoSet = {};
+    for (var item in taughtIn) {
+      if (item is Map) {
+        final batch = item['batch'];
+        if (batch is Map) {
+          final course = batch['course_id'];
+          final courseName = course is Map
+              ? (course['name']?.toString() ?? '')
+              : '';
+          final startYear = batch['start_year']?.toString() ?? '';
+          final endYear = batch['end_year']?.toString() ?? '';
+          final semester = item['semester']?.toString() ?? '';
+          if (courseName.isNotEmpty) {
+            batchInfoSet.add(
+              '$courseName ($startYear-$endYear) - Sem $semester',
+            );
+          }
+        }
+      }
+    }
+    final batchInfoList = batchInfoSet.toList();
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -232,8 +259,20 @@ class _HomeViewState extends State<HomeView> {
         border: Border.all(color: Colors.grey.shade100),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.menu_book_outlined, size: 24, color: primaryColor),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: primaryColor.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              Icons.menu_book_outlined,
+              size: 24,
+              color: primaryColor,
+            ),
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -243,31 +282,45 @@ class _HomeViewState extends State<HomeView> {
                   subjectName,
                   style: const TextStyle(
                     fontSize: 16,
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w600,
                     color: Colors.black87,
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  courseName,
-                  style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                const SizedBox(height: 8),
+                ...batchInfoList.map(
+                  (info) => Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.school_outlined,
+                          size: 14,
+                          color: Colors.grey.shade500,
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            info,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
+                if (batchInfoList.isEmpty)
+                  Text(
+                    'No batch assigned',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.grey.shade400,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
               ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: primaryColor.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              "Sem $semesters",
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: primaryColor,
-              ),
             ),
           ),
         ],

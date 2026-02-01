@@ -1,4 +1,4 @@
-const kBaseUrl = 'http://192.168.1.4:3000/api';
+const kBaseUrl = 'http://192.168.1.7:3000/api';
 
 const kStaffLoginRoute = '$kBaseUrl/staff/login';
 const kStaffProfile = '$kBaseUrl/staff/profile';
