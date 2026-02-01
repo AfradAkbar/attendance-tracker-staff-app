@@ -25,15 +25,17 @@ class _StudentsViewState extends State<StudentsView> {
   }
 
   Future<void> _loadStudents() async {
+    if (!mounted) return;
     setState(() => isLoading = true);
 
     try {
       final data = await ApiService.get(kStaffMyStudents);
 
+      if (!mounted) return;
       if (data != null && data['data'] != null) {
         // Only include students whose status is 'approved'
         final allStudents = List<Map<String, dynamic>>.from(data['data']);
-        students = allStudents.where((s) => (s['status'] ?? '').toLowerCase() == 'approved').toList();
+        students = allStudents.toList();
         print(students);
         filteredStudents = students;
         setState(() {});
@@ -41,7 +43,9 @@ class _StudentsViewState extends State<StudentsView> {
     } catch (e) {
       print('Error loading students: $e');
     } finally {
-      setState(() => isLoading = false);
+      if (mounted) {
+        setState(() => isLoading = false);
+      }
     }
   }
 
@@ -302,7 +306,11 @@ class _StudentsViewState extends State<StudentsView> {
     final name = student['name']?.toString() ?? '';
     final email = student['email']?.toString() ?? '';
     final phone = student['phone_number']?.toString() ?? '';
-    final imageUrl = student['image_url']?.toString() ?? '';
+    // Check both field names for profile image
+    final imageUrl =
+        student['profile_image_url']?.toString() ??
+        student['image_url']?.toString() ??
+        '';
     final registerNumber = student['register_number']?.toString() ?? '';
 
     // Batch and course details
@@ -460,7 +468,11 @@ class _StudentsViewState extends State<StudentsView> {
     final gender = student['gender']?.toString() ?? '';
     final dob = student['dob']?.toString() ?? '';
     final address = student['address']?.toString() ?? '';
-    final imageUrl = student['image_url']?.toString() ?? '';
+    // Check both field names for profile image
+    final imageUrl =
+        student['profile_image_url']?.toString() ??
+        student['image_url']?.toString() ??
+        '';
     final registerNumber = student['register_number']?.toString() ?? '';
 
     // Batch and course details
