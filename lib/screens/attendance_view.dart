@@ -632,7 +632,7 @@ class _AttendanceViewState extends State<AttendanceView> {
   Widget _buildStudentAttendanceCard(Map<String, dynamic> student) {
     final studentId = student['_id']?.toString() ?? '';
     final studentName = student['name']?.toString() ?? '';
-    final imageUrl = student['image_url']?.toString() ?? '';
+    final imageUrl = student['profile_image_url']?.toString() ?? '';
     final status = attendanceMap[studentId] ?? 'present';
 
     return Container(
