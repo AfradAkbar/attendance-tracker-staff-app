@@ -31,11 +31,12 @@ class _StudentsViewState extends State<StudentsView> {
       final data = await ApiService.get(kStaffMyStudents);
 
       if (data != null && data['data'] != null) {
-        setState(() {
-          students = List<Map<String, dynamic>>.from(data['data']);
-          print(students);
-          filteredStudents = students;
-        });
+        // Only include students whose status is 'approved'
+        final allStudents = List<Map<String, dynamic>>.from(data['data']);
+        students = allStudents.where((s) => (s['status'] ?? '').toLowerCase() == 'approved').toList();
+        print(students);
+        filteredStudents = students;
+        setState(() {});
       }
     } catch (e) {
       print('Error loading students: $e');

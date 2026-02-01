@@ -220,8 +220,22 @@ class _HomeViewState extends State<HomeView> {
 
   Widget _buildSubjectCard(Map<String, dynamic> subject) {
     final subjectName = subject['subject_name']?.toString() ?? '';
-    final courseName = subject['course_id']?['name']?.toString() ?? '';
-    final semesters = (subject['semesters'] as List?)?.join(', ') ?? '';
+    // Handle course_ids as a list of objects
+    String courseNames = '';
+    if (subject['course_ids'] is List) {
+      final courses = subject['course_ids'] as List;
+      courseNames = courses
+          .map((c) => c is Map && c['name'] != null ? c['name'].toString() : '')
+          .where((name) => name.isNotEmpty)
+          .join(', ');
+    }
+    // Handle semesters as a list of numbers
+    String semesters = '';
+    if (subject['semesters'] is List) {
+      semesters = (subject['semesters'] as List)
+          .map((s) => s.toString())
+          .join(', ');
+    }
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -249,7 +263,7 @@ class _HomeViewState extends State<HomeView> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  courseName,
+                  courseNames,
                   style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
                 ),
               ],
@@ -262,7 +276,7 @@ class _HomeViewState extends State<HomeView> {
               borderRadius: BorderRadius.circular(12),
             ),
             child: Text(
-              "Sem $semesters",
+              semesters.isNotEmpty ? "Sem $semesters" : '',
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
