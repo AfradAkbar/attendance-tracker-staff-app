@@ -28,3 +28,7 @@ const kUpdateStudentStatus =
     '$kBaseUrl/staff/students'; // Append /:student_id/status
 const kUpdateStudentRegisterNumber =
     '$kBaseUrl/staff/students'; // Append /:student_id/register-number
+
+// Overall semester-wise attendance for a specific student
+String kStudentOverallAttendance(String studentId) =>
+    '$kBaseUrl/attendance/student/$studentId/overall';

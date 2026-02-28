@@ -474,6 +474,7 @@ class _StudentsViewState extends State<StudentsView> {
         student['image_url']?.toString() ??
         '';
     final registerNumber = student['register_number']?.toString() ?? '';
+    final studentId = student['_id']?.toString() ?? '';
 
     // Batch and course details
     final batchData = student['batch_id'] as Map<String, dynamic>?;
@@ -489,181 +490,442 @@ class _StudentsViewState extends State<StudentsView> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(24),
-            topRight: Radius.circular(24),
-          ),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Handle bar
-            Container(
-              margin: const EdgeInsets.only(top: 12),
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade300,
-                borderRadius: BorderRadius.circular(2),
+      builder: (context) {
+        // State for attendance data within the bottom sheet
+        List<Map<String, dynamic>> semesterAttendance = [];
+        Map<String, dynamic>? overallAttendance;
+        bool isAttendanceLoading = true;
+
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            // Fetch attendance on first build
+            if (isAttendanceLoading && studentId.isNotEmpty) {
+              ApiService.get(kStudentOverallAttendance(studentId))
+                  .then((data) {
+                    if (data != null &&
+                        data['success'] == true &&
+                        data['data'] != null) {
+                      final result = data['data'] as Map<String, dynamic>;
+                      setSheetState(() {
+                        semesterAttendance = List<Map<String, dynamic>>.from(
+                          result['semesters'] ?? [],
+                        );
+                        overallAttendance =
+                            result['overall'] as Map<String, dynamic>?;
+                        isAttendanceLoading = false;
+                      });
+                    } else {
+                      setSheetState(() => isAttendanceLoading = false);
+                    }
+                  })
+                  .catchError((e) {
+                    print('Failed to fetch student overall attendance: $e');
+                    setSheetState(() => isAttendanceLoading = false);
+                  });
+            }
+
+            return Container(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.85,
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                children: [
-                  // Profile image
-                  Container(
-                    height: 80,
-                    width: 80,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: primaryColor.withOpacity(0.1),
-                      border: Border.all(
-                        color: primaryColor.withOpacity(0.3),
-                        width: 2,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(24),
+                  topRight: Radius.circular(24),
+                ),
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Handle bar
+                    Container(
+                      margin: const EdgeInsets.only(top: 12),
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(2),
                       ),
                     ),
-                    child: ClipOval(
-                      child: imageUrl.isNotEmpty
-                          ? Image.network(
-                              imageUrl,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) =>
-                                  Center(
-                                    child: Text(
-                                      name.isNotEmpty
-                                          ? name[0].toUpperCase()
-                                          : 'S',
-                                      style: TextStyle(
-                                        fontSize: 32,
-                                        fontWeight: FontWeight.w600,
-                                        color: primaryColor,
-                                      ),
-                                    ),
-                                  ),
-                            )
-                          : Center(
-                              child: Text(
-                                name.isNotEmpty ? name[0].toUpperCase() : 'S',
-                                style: TextStyle(
-                                  fontSize: 32,
-                                  fontWeight: FontWeight.w600,
-                                  color: primaryColor,
-                                ),
+                    Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        children: [
+                          // Profile image
+                          Container(
+                            height: 80,
+                            width: 80,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: primaryColor.withOpacity(0.1),
+                              border: Border.all(
+                                color: primaryColor.withOpacity(0.3),
+                                width: 2,
                               ),
                             ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  // Name
-                  Text(
-                    name,
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.black87,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  // Course info
-                  if (courseName.isNotEmpty)
-                    Text(
-                      '$courseName • $startYear-$endYear • Semester $semester',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: primaryColor,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  const SizedBox(height: 12),
-                  // Register number with edit button
-                  GestureDetector(
-                    onTap: () {
-                      Navigator.pop(context);
-                      _showEditRegisterNumberDialog(student);
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: registerNumber.isNotEmpty
-                            ? Colors.blue.withOpacity(0.1)
-                            : Colors.orange.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: registerNumber.isNotEmpty
-                              ? Colors.blue.withOpacity(0.3)
-                              : Colors.orange.withOpacity(0.3),
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.badge_outlined,
-                            size: 16,
-                            color: registerNumber.isNotEmpty
-                                ? Colors.blue
-                                : Colors.orange,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            registerNumber.isNotEmpty
-                                ? registerNumber
-                                : 'No Register Number',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: registerNumber.isNotEmpty
-                                  ? Colors.blue
-                                  : Colors.orange,
+                            child: ClipOval(
+                              child: imageUrl.isNotEmpty
+                                  ? Image.network(
+                                      imageUrl,
+                                      fit: BoxFit.cover,
+                                      errorBuilder:
+                                          (context, error, stackTrace) =>
+                                              Center(
+                                                child: Text(
+                                                  name.isNotEmpty
+                                                      ? name[0].toUpperCase()
+                                                      : 'S',
+                                                  style: TextStyle(
+                                                    fontSize: 32,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: primaryColor,
+                                                  ),
+                                                ),
+                                              ),
+                                    )
+                                  : Center(
+                                      child: Text(
+                                        name.isNotEmpty
+                                            ? name[0].toUpperCase()
+                                            : 'S',
+                                        style: TextStyle(
+                                          fontSize: 32,
+                                          fontWeight: FontWeight.w600,
+                                          color: primaryColor,
+                                        ),
+                                      ),
+                                    ),
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          Icon(
-                            Icons.edit_outlined,
-                            size: 14,
-                            color: registerNumber.isNotEmpty
-                                ? Colors.blue
-                                : Colors.orange,
+                          const SizedBox(height: 16),
+                          // Name
+                          Text(
+                            name,
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.black87,
+                            ),
                           ),
+                          const SizedBox(height: 4),
+                          // Course info
+                          if (courseName.isNotEmpty)
+                            Text(
+                              '$courseName • $startYear-$endYear • Semester $semester',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: primaryColor,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          const SizedBox(height: 12),
+                          // Register number with edit button
+                          GestureDetector(
+                            onTap: () {
+                              Navigator.pop(context);
+                              _showEditRegisterNumberDialog(student);
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: registerNumber.isNotEmpty
+                                    ? Colors.blue.withOpacity(0.1)
+                                    : Colors.orange.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: registerNumber.isNotEmpty
+                                      ? Colors.blue.withOpacity(0.3)
+                                      : Colors.orange.withOpacity(0.3),
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.badge_outlined,
+                                    size: 16,
+                                    color: registerNumber.isNotEmpty
+                                        ? Colors.blue
+                                        : Colors.orange,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    registerNumber.isNotEmpty
+                                        ? registerNumber
+                                        : 'No Register Number',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: registerNumber.isNotEmpty
+                                          ? Colors.blue
+                                          : Colors.orange,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Icon(
+                                    Icons.edit_outlined,
+                                    size: 14,
+                                    color: registerNumber.isNotEmpty
+                                        ? Colors.blue
+                                        : Colors.orange,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+
+                          // Overall Attendance Section
+                          _buildStudentAttendanceSection(
+                            semesterAttendance,
+                            overallAttendance,
+                            isAttendanceLoading,
+                          ),
+
+                          const SizedBox(height: 20),
+                          // Details grid
+                          _buildDetailTile(
+                            Icons.email_outlined,
+                            'Email',
+                            email,
+                          ),
+                          _buildDetailTile(
+                            Icons.phone_outlined,
+                            'Phone',
+                            phone,
+                          ),
+                          _buildDetailTile(
+                            Icons.person_outline,
+                            'Gender',
+                            gender.isNotEmpty
+                                ? gender[0].toUpperCase() + gender.substring(1)
+                                : '-',
+                          ),
+                          _buildDetailTile(
+                            Icons.cake_outlined,
+                            'Date of Birth',
+                            dob.isNotEmpty ? dob : '-',
+                          ),
+                          if (address.isNotEmpty)
+                            _buildDetailTile(
+                              Icons.location_on_outlined,
+                              'Address',
+                              address,
+                            ),
+                          const SizedBox(height: 16),
                         ],
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 24),
-                  // Details grid
-                  _buildDetailTile(Icons.email_outlined, 'Email', email),
-                  _buildDetailTile(Icons.phone_outlined, 'Phone', phone),
-                  _buildDetailTile(
-                    Icons.person_outline,
-                    'Gender',
-                    gender.isNotEmpty
-                        ? gender[0].toUpperCase() + gender.substring(1)
-                        : '-',
-                  ),
-                  _buildDetailTile(
-                    Icons.cake_outlined,
-                    'Date of Birth',
-                    dob.isNotEmpty ? dob : '-',
-                  ),
-                  if (address.isNotEmpty)
-                    _buildDetailTile(
-                      Icons.location_on_outlined,
-                      'Address',
-                      address,
-                    ),
-                  const SizedBox(height: 16),
-                ],
+                  ],
+                ),
               ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Color _getAttendanceColor(int percentage) {
+    if (percentage >= 75) return const Color(0xFF2E7D32);
+    if (percentage >= 50) return const Color(0xFFE65100);
+    return const Color(0xFFC62828);
+  }
+
+  Widget _buildStudentAttendanceSection(
+    List<Map<String, dynamic>> semesterAttendance,
+    Map<String, dynamic>? overallAttendance,
+    bool isLoading,
+  ) {
+    if (isLoading) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: primaryColor.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Center(
+          child: SizedBox(
+            height: 20,
+            width: 20,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: primaryColor,
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (semesterAttendance.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.info_outline, size: 18, color: Colors.grey.shade400),
+            const SizedBox(width: 10),
+            Text(
+              'No attendance records yet',
+              style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
             ),
           ],
         ),
+      );
+    }
+
+    final overallPct = overallAttendance?['attendance_percentage'] ?? 0;
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: primaryColor.withOpacity(0.04),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: primaryColor.withOpacity(0.15)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header with overall percentage
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: _getAttendanceColor(overallPct).withOpacity(0.08),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(12),
+                topRight: Radius.circular(12),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.bar_chart_rounded,
+                  size: 18,
+                  color: _getAttendanceColor(overallPct),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  "Overall Attendance",
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.black87,
+                  ),
+                ),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: _getAttendanceColor(overallPct).withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    "$overallPct%",
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: _getAttendanceColor(overallPct),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Semester rows
+          ...semesterAttendance.map((sem) {
+            final semNum = sem['semester'] ?? 0;
+            final pct = sem['attendance_percentage'] ?? 0;
+            final total = sem['total_classes'] ?? 0;
+            final present = (sem['present'] ?? 0) + (sem['late'] ?? 0);
+
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              child: Row(
+                children: [
+                  Container(
+                    width: 30,
+                    height: 30,
+                    decoration: BoxDecoration(
+                      color: _getAttendanceColor(pct).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Center(
+                      child: Text(
+                        "S$semNum",
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: _getAttendanceColor(pct),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "Semester $semNum",
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(3),
+                          child: LinearProgressIndicator(
+                            value: pct / 100.0,
+                            backgroundColor: Colors.grey.shade200,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              _getAttendanceColor(pct),
+                            ),
+                            minHeight: 4,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        "$pct%",
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: _getAttendanceColor(pct),
+                        ),
+                      ),
+                      Text(
+                        "$present/$total",
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.grey.shade500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          }),
+          const SizedBox(height: 6),
+        ],
       ),
     );
   }
