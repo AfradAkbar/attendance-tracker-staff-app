@@ -1,4 +1,4 @@
-const kBaseUrl = 'http://192.168.1.11:3000/api';
+const kBaseUrl = 'http://192.168.1.2:3000/api';
 
 const kStaffLoginRoute = '$kBaseUrl/staff/login';
 const kStaffProfile = '$kBaseUrl/staff/profile';
@@ -11,6 +11,12 @@ const kStaffBatchStudents = '$kBaseUrl/staff/students'; // Append /:batch_id
 const kAttendanceMarkBulk = '$kBaseUrl/attendance/mark-bulk';
 const kAttendanceBatchDateHour =
     '$kBaseUrl/attendance/batch'; // Append /:batch_id/date/:date/hour/:hour
+
+// Finalize period - mark absent for unmarked students
+const kFinalizePeriod = '$kBaseUrl/attendance/finalize-period';
+
+// Period timings
+const kPeriodTimings = '$kBaseUrl/attendance/period-timings';
 
 // Notifications (unified - works for all user types)
 const kNotifications = '$kBaseUrl/notification';
@@ -28,6 +34,8 @@ const kUpdateStudentStatus =
     '$kBaseUrl/staff/students'; // Append /:student_id/status
 const kUpdateStudentRegisterNumber =
     '$kBaseUrl/staff/students'; // Append /:student_id/register-number
+const kUpdateStudentPhoto =
+    '$kBaseUrl/staff/students'; // Append /:student_id/photo
 
 // Overall semester-wise attendance for a specific student
 String kStudentOverallAttendance(String studentId) =>

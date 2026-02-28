@@ -1,4 +1,7 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:staff_app/api_service.dart';
 import 'package:staff_app/constants.dart';
 
@@ -70,6 +73,8 @@ class _StudentsViewState extends State<StudentsView> {
       }
     });
   }
+
+  final ImagePicker _picker = ImagePicker();
 
   Future<void> _updateRegisterNumber(
     String studentId,
@@ -185,6 +190,71 @@ class _StudentsViewState extends State<StudentsView> {
         ],
       ),
     );
+  }
+
+  Future<Map<String, dynamic>?> _pickAndUploadStudentPhoto(
+    String studentId,
+  ) async {
+    try {
+      final XFile? image = await _picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 512,
+        maxHeight: 512,
+        imageQuality: 80,
+      );
+
+      if (image == null) return null;
+
+      // Convert to base64
+      final bytes = await File(image.path).readAsBytes();
+      final base64Image = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+
+      // Upload to server
+      final response = await ApiService.put(
+        '$kUpdateStudentPhoto/$studentId/photo',
+        {'profile_image': base64Image},
+      );
+
+      if (response != null && response['success'] == true) {
+        final newUrl = response['data']?['profile_image_url']?.toString() ?? '';
+
+        // Update local state
+        setState(() {
+          for (var list in [students, filteredStudents]) {
+            final index = list.indexWhere((s) => s['_id'] == studentId);
+            if (index != -1) {
+              list[index]['profile_image_url'] = newUrl;
+            }
+          }
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Student photo updated successfully'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+        return response['data'] as Map<String, dynamic>?;
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(response?['message'] ?? 'Failed to update photo'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+    return null;
   }
 
   @override
@@ -495,6 +565,8 @@ class _StudentsViewState extends State<StudentsView> {
         List<Map<String, dynamic>> semesterAttendance = [];
         Map<String, dynamic>? overallAttendance;
         bool isAttendanceLoading = true;
+        String currentImageUrl = imageUrl;
+        bool isUploadingPhoto = false;
 
         return StatefulBuilder(
           builder: (context, setSheetState) {
@@ -553,50 +625,121 @@ class _StudentsViewState extends State<StudentsView> {
                       padding: const EdgeInsets.all(24),
                       child: Column(
                         children: [
-                          // Profile image
-                          Container(
-                            height: 80,
-                            width: 80,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: primaryColor.withOpacity(0.1),
-                              border: Border.all(
-                                color: primaryColor.withOpacity(0.3),
-                                width: 2,
-                              ),
-                            ),
-                            child: ClipOval(
-                              child: imageUrl.isNotEmpty
-                                  ? Image.network(
-                                      imageUrl,
-                                      fit: BoxFit.cover,
-                                      errorBuilder:
-                                          (context, error, stackTrace) =>
-                                              Center(
-                                                child: Text(
-                                                  name.isNotEmpty
-                                                      ? name[0].toUpperCase()
-                                                      : 'S',
-                                                  style: TextStyle(
-                                                    fontSize: 32,
-                                                    fontWeight: FontWeight.w600,
-                                                    color: primaryColor,
+                          // Profile image with camera overlay
+                          GestureDetector(
+                            onTap: isUploadingPhoto
+                                ? null
+                                : () async {
+                                    setSheetState(
+                                      () => isUploadingPhoto = true,
+                                    );
+                                    final result =
+                                        await _pickAndUploadStudentPhoto(
+                                          studentId,
+                                        );
+                                    if (result != null) {
+                                      final newUrl =
+                                          result['profile_image_url']
+                                              ?.toString() ??
+                                          '';
+                                      if (newUrl.isNotEmpty) {
+                                        setSheetState(() {
+                                          currentImageUrl = newUrl;
+                                        });
+                                      }
+                                    }
+                                    setSheetState(
+                                      () => isUploadingPhoto = false,
+                                    );
+                                  },
+                            child: Stack(
+                              children: [
+                                Container(
+                                  height: 80,
+                                  width: 80,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: primaryColor.withOpacity(0.1),
+                                    border: Border.all(
+                                      color: primaryColor.withOpacity(0.3),
+                                      width: 2,
+                                    ),
+                                  ),
+                                  child: isUploadingPhoto
+                                      ? Center(
+                                          child: SizedBox(
+                                            width: 30,
+                                            height: 30,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2.5,
+                                              color: primaryColor,
+                                            ),
+                                          ),
+                                        )
+                                      : ClipOval(
+                                          child: currentImageUrl.isNotEmpty
+                                              ? Image.network(
+                                                  currentImageUrl,
+                                                  fit: BoxFit.cover,
+                                                  width: 80,
+                                                  height: 80,
+                                                  errorBuilder:
+                                                      (
+                                                        context,
+                                                        error,
+                                                        stackTrace,
+                                                      ) => Center(
+                                                        child: Text(
+                                                          name.isNotEmpty
+                                                              ? name[0]
+                                                                    .toUpperCase()
+                                                              : 'S',
+                                                          style: TextStyle(
+                                                            fontSize: 32,
+                                                            fontWeight:
+                                                                FontWeight.w600,
+                                                            color: primaryColor,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                )
+                                              : Center(
+                                                  child: Text(
+                                                    name.isNotEmpty
+                                                        ? name[0].toUpperCase()
+                                                        : 'S',
+                                                    style: TextStyle(
+                                                      fontSize: 32,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      color: primaryColor,
+                                                    ),
                                                   ),
                                                 ),
-                                              ),
-                                    )
-                                  : Center(
-                                      child: Text(
-                                        name.isNotEmpty
-                                            ? name[0].toUpperCase()
-                                            : 'S',
-                                        style: TextStyle(
-                                          fontSize: 32,
-                                          fontWeight: FontWeight.w600,
-                                          color: primaryColor,
                                         ),
+                                ),
+                                // Camera icon overlay
+                                Positioned(
+                                  bottom: 0,
+                                  right: 0,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(6),
+                                    decoration: BoxDecoration(
+                                      color: primaryColor,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: Colors.white,
+                                        width: 2,
                                       ),
                                     ),
+                                    child: const Icon(
+                                      Icons.camera_alt,
+                                      size: 14,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                           const SizedBox(height: 16),

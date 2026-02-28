@@ -19,17 +19,96 @@ class _AttendanceViewState extends State<AttendanceView> {
   Map<String, dynamic>? selectedSlot;
   List<Map<String, dynamic>> students = [];
   Map<String, String> attendanceMap = {}; // studentId: status
+  List<Map<String, dynamic>> periodTimings = [];
 
   bool isLoadingTimetable = true;
   bool isLoadingStudents = false;
   bool isSaving = false;
+  bool isFinalizing = false;
   String? currentDay;
   String? currentDate;
 
   @override
   void initState() {
     super.initState();
+    _loadPeriodTimings();
     _loadTimetableForDate();
+  }
+
+  /// Fetch period timings from backend
+  Future<void> _loadPeriodTimings() async {
+    try {
+      final data = await ApiService.get(kPeriodTimings);
+      if (data != null && data['data'] != null) {
+        setState(() {
+          periodTimings = List<Map<String, dynamic>>.from(data['data']);
+        });
+      }
+    } catch (e) {
+      print('Error loading period timings: $e');
+    }
+  }
+
+  /// Check if a period slot can be finalized:
+  /// - Date must be today
+  /// - Current time must be >= period start time (class started or ended)
+  bool _canFinalizePeriod(Map<String, dynamic> slot) {
+    // Only allow finalize for today
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final selected = DateTime(
+      selectedDate.year,
+      selectedDate.month,
+      selectedDate.day,
+    );
+    if (!today.isAtSameMomentAs(selected)) return false;
+
+    final hour = slot['hour'];
+    if (hour == null || periodTimings.isEmpty) return false;
+
+    // Find the timing for this period
+    final timing = periodTimings.firstWhere(
+      (t) => t['period'] == hour,
+      orElse: () => {},
+    );
+    if (timing.isEmpty) return false;
+
+    final startTime = timing['start_time']?.toString() ?? '';
+    if (startTime.isEmpty) return false;
+
+    // Parse start time to minutes
+    final parts = startTime.split(':');
+    if (parts.length != 2) return false;
+    final startMinutes = int.parse(parts[0]) * 60 + int.parse(parts[1]);
+    final currentMinutes = now.hour * 60 + now.minute;
+
+    // Show button if current time >= period start time
+    return currentMinutes >= startMinutes;
+  }
+
+  /// Get period time range string for display
+  String _getPeriodTimeRange(int hour) {
+    if (periodTimings.isEmpty) return '';
+    final timing = periodTimings.firstWhere(
+      (t) => t['period'] == hour,
+      orElse: () => {},
+    );
+    if (timing.isEmpty) return '';
+    final start = timing['start_time']?.toString() ?? '';
+    final end = timing['end_time']?.toString() ?? '';
+    if (start.isEmpty || end.isEmpty) return '';
+    return '${_formatTime(start)} - ${_formatTime(end)}';
+  }
+
+  String _formatTime(String time24) {
+    final parts = time24.split(':');
+    if (parts.length != 2) return time24;
+    int h = int.parse(parts[0]);
+    final m = parts[1];
+    final period = h >= 12 ? 'PM' : 'AM';
+    if (h > 12) h -= 12;
+    if (h == 0) h = 12;
+    return '$h:$m $period';
   }
 
   Future<void> _loadTimetableForDate() async {
@@ -412,7 +491,8 @@ class _AttendanceViewState extends State<AttendanceView> {
   }
 
   Widget _buildSlotCard(Map<String, dynamic> slot) {
-    final hour = slot['hour']?.toString() ?? '';
+    final hour = slot['hour'];
+    final hourStr = hour?.toString() ?? '';
     final subjectName =
         slot['subject']?['name']?.toString() ?? 'Unknown Subject';
     final batchName = slot['batch']?['name']?.toString() ?? '';
@@ -420,6 +500,10 @@ class _AttendanceViewState extends State<AttendanceView> {
     final totalStudents = slot['total_students'] ?? 0;
     final markedCount = slot['marked_count'] ?? 0;
     final isMarked = slot['is_marked'] == true;
+    final canFinalize = _canFinalizePeriod(slot);
+    final timeRange = _getPeriodTimeRange(
+      hour is int ? hour : int.tryParse(hourStr) ?? 0,
+    );
 
     return GestureDetector(
       onTap: () => _loadStudentsForSlot(slot),
@@ -434,98 +518,438 @@ class _AttendanceViewState extends State<AttendanceView> {
             width: isMarked ? 2 : 1,
           ),
         ),
-        child: Row(
+        child: Column(
           children: [
-            // Hour badge
-            Container(
-              height: 50,
-              width: 50,
-              decoration: BoxDecoration(
-                color: isMarked
-                    ? Colors.green.shade50
-                    : primaryColor.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Center(
-                child: Text(
-                  hour,
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                    color: isMarked ? Colors.green : primaryColor,
+            Row(
+              children: [
+                // Hour badge
+                Container(
+                  height: 50,
+                  width: 50,
+                  decoration: BoxDecoration(
+                    color: isMarked
+                        ? Colors.green.shade50
+                        : primaryColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 16),
-            // Details
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    subjectName,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black87,
+                  child: Center(
+                    child: Text(
+                      hourStr,
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        color: isMarked ? Colors.green : primaryColor,
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    batchName.isNotEmpty ? batchName : courseName,
-                    style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
+                ),
+                const SizedBox(width: 16),
+                // Details
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(
-                        Icons.people_outline,
-                        size: 14,
-                        color: Colors.grey.shade500,
-                      ),
-                      const SizedBox(width: 4),
                       Text(
-                        '$totalStudents students',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade500,
+                        subjectName,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black87,
                         ),
                       ),
-                      if (isMarked) ...[
-                        const SizedBox(width: 12),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 2,
+                      const SizedBox(height: 4),
+                      Text(
+                        batchName.isNotEmpty ? batchName : courseName,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.people_outline,
+                            size: 14,
+                            color: Colors.grey.shade500,
                           ),
-                          decoration: BoxDecoration(
-                            color: Colors.green.shade50,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            '$markedCount marked',
+                          const SizedBox(width: 4),
+                          Text(
+                            '$totalStudents students',
                             style: TextStyle(
-                              fontSize: 11,
-                              color: Colors.green.shade700,
-                              fontWeight: FontWeight.w500,
+                              fontSize: 12,
+                              color: Colors.grey.shade500,
                             ),
                           ),
+                          if (isMarked) ...[
+                            const SizedBox(width: 12),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.green.shade50,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                '$markedCount marked',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.green.shade700,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      if (timeRange.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.access_time_outlined,
+                              size: 13,
+                              color: Colors.grey.shade400,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              timeRange,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.grey.shade500,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ],
                   ),
-                ],
+                ),
+                // Arrow
+                Icon(
+                  isMarked ? Icons.check_circle : Icons.chevron_right,
+                  color: isMarked ? Colors.green : Colors.grey.shade400,
+                ),
+              ],
+            ),
+            // Finalize button - only show when period time matches current time
+            if (canFinalize && isMarked && markedCount < totalStudents) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: isFinalizing ? null : () => _finalizePeriod(slot),
+                  icon: const Icon(Icons.done_all, size: 18),
+                  label: Text(
+                    isFinalizing
+                        ? 'Finalizing...'
+                        : 'Finalize Period (Mark ${totalStudents - markedCount} Absent)',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orange.shade700,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
               ),
-            ),
-            // Arrow
-            Icon(
-              isMarked ? Icons.check_circle : Icons.chevron_right,
-              color: isMarked ? Colors.green : Colors.grey.shade400,
-            ),
+            ],
           ],
         ),
       ),
+    );
+  }
+
+  /// Call the finalize-period API and show summary dialog
+  Future<void> _finalizePeriod(Map<String, dynamic> slot) async {
+    final batchId = slot['batch']?['_id']?.toString() ?? '';
+    final subjectId = slot['subject']?['_id']?.toString() ?? '';
+    final hour = slot['hour'];
+    final subjectName = slot['subject']?['name']?.toString() ?? 'Unknown';
+
+    // Confirm before finalizing
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Finalize Period?'),
+        content: Text(
+          'This will mark all students who have not been marked for Hour $hour ($subjectName) as absent.\n\nThis action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange.shade700,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Finalize'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() => isFinalizing = true);
+
+    try {
+      final dateStr =
+          currentDate ?? DateFormat('yyyy-MM-dd').format(selectedDate);
+      final res = await ApiService.post(kFinalizePeriod, {
+        'batch_id': batchId,
+        'hour': hour,
+        'subject_id': subjectId,
+        'date': dateStr,
+      });
+
+      if (res != null && res['success'] == true) {
+        final data = res['data'] as Map<String, dynamic>? ?? {};
+        if (mounted) {
+          _showFinalizeSummaryDialog(data, subjectName, hour);
+          // Refresh timetable to update counts
+          _loadTimetableForDate();
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(res?['message'] ?? 'Failed to finalize period'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print('Error finalizing period: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to finalize period'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      setState(() => isFinalizing = false);
+    }
+  }
+
+  /// Show a summary dialog after finalizing
+  void _showFinalizeSummaryDialog(
+    Map<String, dynamic> data,
+    String subjectName,
+    dynamic hour,
+  ) {
+    final totalStudents = data['total_students'] ?? 0;
+    final present = data['present'] ?? 0;
+    final late = data['late'] ?? 0;
+    final totalAbsent = data['total_absent'] ?? 0;
+    final newlyAbsent = data['newly_marked_absent'] ?? 0;
+    final absentStudents = data['absent_students'] as List<dynamic>? ?? [];
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Icon(Icons.check_circle, color: Colors.green, size: 28),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Text(
+                'Period Finalized',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Subject & Hour
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: primaryColor.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      '$subjectName — Hour $hour',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: primaryColor,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Total Students: $totalStudents',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              // Summary stats
+              _summaryRow(
+                Icons.check_circle_outline,
+                'Present',
+                present,
+                Colors.green,
+              ),
+              const SizedBox(height: 8),
+              _summaryRow(Icons.access_time, 'Late', late, Colors.orange),
+              const SizedBox(height: 8),
+              _summaryRow(
+                Icons.cancel_outlined,
+                'Total Absent',
+                totalAbsent,
+                Colors.red,
+              ),
+              if (newlyAbsent > 0) ...[
+                const SizedBox(height: 4),
+                Padding(
+                  padding: const EdgeInsets.only(left: 32),
+                  child: Text(
+                    '($newlyAbsent newly marked absent)',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.red.shade400,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ),
+              ],
+              // Absent students list
+              if (absentStudents.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                const Text(
+                  'Students Marked Absent:',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  constraints: const BoxConstraints(maxHeight: 150),
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: absentStudents.length,
+                    itemBuilder: (context, index) {
+                      final student = absentStudents[index];
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 3),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 24,
+                              height: 24,
+                              decoration: BoxDecoration(
+                                color: Colors.red.shade50,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Center(
+                                child: Text(
+                                  '${index + 1}',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.red.shade700,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                student['name']?.toString() ?? 'Unknown',
+                                style: const TextStyle(fontSize: 13),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () => Navigator.pop(ctx),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryColor,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+              child: const Text(
+                'Done',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _summaryRow(IconData icon, String label, int count, Color color) {
+    return Row(
+      children: [
+        Icon(icon, size: 20, color: color),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            label,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          ),
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            count.toString(),
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: color,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
