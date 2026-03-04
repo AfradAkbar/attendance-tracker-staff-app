@@ -23,6 +23,7 @@ const kNotifications = '$kBaseUrl/notification';
 
 // HOD notification endpoints
 const kHodSendNotification = '$kBaseUrl/staff/hod/notifications';
+const kHodNotificationHistory = '$kBaseUrl/staff/hod/notifications';
 const kHodBatches = '$kBaseUrl/staff/hod/batches';
 
 // HOD timetable management endpoints
