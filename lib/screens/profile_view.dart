@@ -6,6 +6,7 @@ import 'package:staff_app/screens/login_screen.dart';
 import 'package:staff_app/notifiers/user_notifier.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
 
 class ProfileView extends StatefulWidget {
   const ProfileView({super.key});
@@ -21,6 +22,38 @@ class _ProfileViewState extends State<ProfileView> {
 
   bool _isUploading = false;
   final ImagePicker _picker = ImagePicker();
+
+  // HOD notification history
+  List<Map<String, dynamic>> _hodNotifications = [];
+  bool _isLoadingNotifications = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Pre-load notifications for HOD
+    final user = userNotifier.value;
+    if (user?.role == 'hod') {
+      _loadHodNotifications();
+    }
+  }
+
+  Future<void> _loadHodNotifications() async {
+    setState(() => _isLoadingNotifications = true);
+    try {
+      final response = await ApiService.get(kHodNotificationHistory);
+      if (response != null && response['success'] == true) {
+        setState(() {
+          _hodNotifications = List<Map<String, dynamic>>.from(
+            response['data'] ?? [],
+          );
+        });
+      }
+    } catch (e) {
+      print('Error loading HOD notification history: $e');
+    } finally {
+      if (mounted) setState(() => _isLoadingNotifications = false);
+    }
+  }
 
   Future<void> _pickAndUploadPhoto() async {
     try {
@@ -321,6 +354,102 @@ class _ProfileViewState extends State<ProfileView> {
                     ),
                   ),
 
+                  const SizedBox(height: 24),
+
+                  // HOD Notification History Section
+                  if (userData.role == 'hod') ...[
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              _sectionTitle("Notification History"),
+                              GestureDetector(
+                                onTap: _loadHodNotifications,
+                                child: Icon(
+                                  Icons.refresh_rounded,
+                                  size: 18,
+                                  color: primaryColor,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          if (_isLoadingNotifications)
+                            Container(
+                              padding: const EdgeInsets.symmetric(vertical: 24),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: Colors.grey.shade100),
+                              ),
+                              child: Center(
+                                child: CircularProgressIndicator(
+                                  color: primaryColor,
+                                  strokeWidth: 2,
+                                ),
+                              ),
+                            )
+                          else if (_hodNotifications.isEmpty)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 28,
+                                horizontal: 16,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: Colors.grey.shade100),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.notifications_off_outlined,
+                                    size: 28,
+                                    color: Colors.grey.shade300,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Text(
+                                    'No notifications sent yet',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.grey.shade400,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          else
+                            Container(
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: Colors.grey.shade100),
+                              ),
+                              child: ListView.builder(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                itemCount: _hodNotifications.length,
+                                itemBuilder: (context, index) {
+                                  final notif = _hodNotifications[index];
+                                  final isLast =
+                                      index == _hodNotifications.length - 1;
+                                  return _buildHistoryTile(
+                                    notif,
+                                    isLast: isLast,
+                                  );
+                                },
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+
                   const SizedBox(height: 40),
                 ],
               ),
@@ -329,6 +458,242 @@ class _ProfileViewState extends State<ProfileView> {
         );
       },
     );
+  }
+
+  Widget _buildHistoryTile(Map<String, dynamic> notif, {bool isLast = false}) {
+    final audience = notif['target_audience'] as String? ?? 'all';
+    final createdAt = notif['createdAt'] != null
+        ? DateTime.tryParse(notif['createdAt'].toString())
+        : null;
+
+    Color audienceColor;
+    IconData audienceIcon;
+    switch (audience) {
+      case 'students':
+        audienceColor = Colors.blue;
+        audienceIcon = Icons.school_outlined;
+        break;
+      case 'parents':
+        audienceColor = Colors.orange;
+        audienceIcon = Icons.family_restroom;
+        break;
+      case 'specific_batch':
+        audienceColor = primaryColor;
+        audienceIcon = Icons.class_outlined;
+        break;
+      default:
+        audienceColor = Colors.purple;
+        audienceIcon = Icons.groups_outlined;
+    }
+
+    return GestureDetector(
+      onTap: () => _showNotificationDetail(notif),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          border: isLast
+              ? null
+              : Border(bottom: BorderSide(color: Colors.grey.shade100)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              height: 40,
+              width: 40,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: audienceColor.withOpacity(0.1),
+              ),
+              child: Icon(audienceIcon, size: 20, color: audienceColor),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          notif['title'] ?? '',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black87,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: audienceColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          audience == 'specific_batch'
+                              ? 'Batch'
+                              : audience[0].toUpperCase() +
+                                    audience.substring(1),
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: audienceColor,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    notif['message'] ?? '',
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (createdAt != null) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      _formatDate(createdAt),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey.shade400,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showNotificationDetail(Map<String, dynamic> notif) {
+    final audience = notif['target_audience'] as String? ?? 'all';
+    final type = (notif['type'] as String? ?? 'general');
+    final createdAt = notif['createdAt'] != null
+        ? DateTime.tryParse(notif['createdAt'].toString())
+        : null;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(24),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(24),
+            topRight: Radius.circular(24),
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                height: 4,
+                width: 40,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: primaryColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    type.toUpperCase(),
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: primaryColor,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    audience == 'specific_batch'
+                        ? 'Specific Batch'
+                        : audience[0].toUpperCase() + audience.substring(1),
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey.shade700,
+                    ),
+                  ),
+                ),
+                if (createdAt != null) ...[
+                  const SizedBox(width: 8),
+                  Text(
+                    _formatDate(createdAt),
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                  ),
+                ],
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              notif['title'] ?? '',
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              notif['message'] ?? '',
+              style: TextStyle(
+                fontSize: 15,
+                height: 1.5,
+                color: Colors.grey.shade700,
+              ),
+            ),
+            const SizedBox(height: 24),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatDate(DateTime date) {
+    final now = DateTime.now();
+    final diff = now.difference(date);
+    if (diff.inMinutes < 1) return 'Just now';
+    if (diff.inHours < 1) return '${diff.inMinutes}m ago';
+    if (diff.inDays < 1) return '${diff.inHours}h ago';
+    if (diff.inDays == 1) return 'Yesterday';
+    if (diff.inDays < 7) return '${diff.inDays}d ago';
+    return DateFormat('MMM d, y').format(date);
   }
 
   Widget _sectionTitle(String title) {
