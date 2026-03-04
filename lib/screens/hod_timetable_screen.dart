@@ -38,13 +38,7 @@ class _HodTimetableScreenState extends State<HodTimetableScreen>
     'Friday',
   ];
 
-  static const List<String> _dayShort = [
-    'Mon',
-    'Tue',
-    'Wed',
-    'Thu',
-    'Fri',
-  ];
+  static const List<String> _dayShort = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 
   @override
   void initState() {
@@ -107,8 +101,7 @@ class _HodTimetableScreenState extends State<HodTimetableScreen>
 
       // Load subjects, staff, and existing timetable in parallel
       final results = await Future.wait([
-        ApiService.get(
-            '$kHodSubjects?batch_id=$batchId&semester=$sem'),
+        ApiService.get('$kHodSubjects?batch_id=$batchId&semester=$sem'),
         ApiService.get(kHodDepartmentStaff),
         ApiService.get('$kHodTimetable/$batchId?semester=$sem'),
       ]);
@@ -119,16 +112,15 @@ class _HodTimetableScreenState extends State<HodTimetableScreen>
 
       setState(() {
         if (subjectRes != null && subjectRes['success'] == true) {
-          subjects =
-              List<Map<String, dynamic>>.from(subjectRes['data'] ?? []);
+          subjects = List<Map<String, dynamic>>.from(subjectRes['data'] ?? []);
         }
         if (staffRes != null && staffRes['success'] == true) {
-          staffList =
-              List<Map<String, dynamic>>.from(staffRes['data'] ?? []);
+          staffList = List<Map<String, dynamic>>.from(staffRes['data'] ?? []);
         }
         if (timetableRes != null && timetableRes['success'] == true) {
-          final slots =
-              List<Map<String, dynamic>>.from(timetableRes['data'] ?? []);
+          final slots = List<Map<String, dynamic>>.from(
+            timetableRes['data'] ?? [],
+          );
           for (final slot in slots) {
             final day = (slot['dayOfWeek'] as num?)?.toInt() ?? 0;
             final hour = (slot['hour'] as num?)?.toInt() ?? 0;
@@ -225,13 +217,13 @@ class _HodTimetableScreenState extends State<HodTimetableScreen>
       backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSheet) => Padding(
-          padding:
-              EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(ctx).viewInsets.bottom,
+          ),
           child: Container(
             decoration: const BoxDecoration(
               color: Colors.white,
-              borderRadius:
-                  BorderRadius.vertical(top: Radius.circular(24)),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
             ),
             padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
             child: Column(
@@ -243,7 +235,9 @@ class _HodTimetableScreenState extends State<HodTimetableScreen>
                   children: [
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 6),
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
                         color: primaryColor.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(8),
@@ -261,7 +255,9 @@ class _HodTimetableScreenState extends State<HodTimetableScreen>
                     Text(
                       '${_dayLabels[day - 1]}  ·  Period $hour',
                       style: const TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.w600),
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     const Spacer(),
                     if (tempSubjectId.isNotEmpty)
@@ -273,7 +269,8 @@ class _HodTimetableScreenState extends State<HodTimetableScreen>
                           tempStaffName = '';
                         }),
                         style: TextButton.styleFrom(
-                            foregroundColor: Colors.red),
+                          foregroundColor: Colors.red,
+                        ),
                         child: const Text('Clear'),
                       ),
                   ],
@@ -354,15 +351,17 @@ class _HodTimetableScreenState extends State<HodTimetableScreen>
                       backgroundColor: primaryColor,
                       foregroundColor: Colors.white,
                       disabledBackgroundColor: Colors.grey.shade200,
-                      padding:
-                          const EdgeInsets.symmetric(vertical: 14),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                     child: const Text(
                       'Apply',
                       style: TextStyle(
-                          fontSize: 15, fontWeight: FontWeight.w600),
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ),
@@ -375,53 +374,48 @@ class _HodTimetableScreenState extends State<HodTimetableScreen>
   }
 
   Widget _pickerLabel(String text) => Text(
-        text,
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          color: Colors.grey.shade600,
-          letterSpacing: 0.4,
-        ),
-      );
+    text,
+    style: TextStyle(
+      fontSize: 12,
+      fontWeight: FontWeight.w600,
+      color: Colors.grey.shade600,
+      letterSpacing: 0.4,
+    ),
+  );
 
   Widget _pickerTile({
     required IconData icon,
     required String value,
     required String placeholder,
     required VoidCallback onTap,
-  }) =>
-      InkWell(
-        onTap: onTap,
+  }) => InkWell(
+    onTap: onTap,
+    borderRadius: BorderRadius.circular(12),
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+      decoration: BoxDecoration(
+        color: surfaceColor,
         borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-          decoration: BoxDecoration(
-            color: surfaceColor,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey.shade200),
-          ),
-          child: Row(
-            children: [
-              Icon(icon, size: 18, color: primaryColor),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  value.isNotEmpty ? value : placeholder,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: value.isNotEmpty
-                        ? Colors.black87
-                        : Colors.grey.shade400,
-                  ),
-                ),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: primaryColor),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              value.isNotEmpty ? value : placeholder,
+              style: TextStyle(
+                fontSize: 14,
+                color: value.isNotEmpty ? Colors.black87 : Colors.grey.shade400,
               ),
-              Icon(Icons.arrow_drop_down,
-                  color: Colors.grey.shade400),
-            ],
+            ),
           ),
-        ),
-      );
+          Icon(Icons.arrow_drop_down, color: Colors.grey.shade400),
+        ],
+      ),
+    ),
+  );
 
   Future<Map<String, String>?> _showItemPicker(
     BuildContext ctx, {
@@ -431,72 +425,75 @@ class _HodTimetableScreenState extends State<HodTimetableScreen>
     required String nameKey,
     String selectedId = '',
     bool allowClear = false,
-  }) =>
-      showDialog<Map<String, String>>(
-        context: ctx,
-        builder: (dCtx) => Dialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 8, 8),
-                child: Row(
-                  children: [
-                    Text(title,
-                        style: const TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.w600)),
-                    const Spacer(),
-                    IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: () => Navigator.pop(dCtx)),
-                  ],
+  }) => showDialog<Map<String, String>>(
+    context: ctx,
+    builder: (dCtx) => Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 8, 8),
+            child: Row(
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-              ),
-              const Divider(height: 1),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 340),
-                child: ListView(
-                  shrinkWrap: true,
-                  children: [
-                    if (allowClear)
-                      ListTile(
-                        leading: const Icon(Icons.do_not_disturb_alt,
-                            color: Colors.red, size: 20),
-                        title: const Text('None',
-                            style: TextStyle(color: Colors.red)),
-                        onTap: () =>
-                            Navigator.pop(dCtx, {'id': '', 'name': ''}),
-                      ),
-                    ...items.map((item) {
-                      final id = item[idKey]?.toString() ?? '';
-                      final name = item[nameKey]?.toString() ?? '';
-                      final selected = id == selectedId;
-                      return ListTile(
-                        leading: Icon(
-                          selected
-                              ? Icons.radio_button_checked
-                              : Icons.radio_button_unchecked,
-                          color: selected
-                              ? primaryColor
-                              : Colors.grey.shade400,
-                          size: 20,
-                        ),
-                        title: Text(name,
-                            style: const TextStyle(fontSize: 14)),
-                        onTap: () =>
-                            Navigator.pop(dCtx, {'id': id, 'name': name}),
-                      );
-                    }),
-                  ],
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(dCtx),
                 ),
-              ),
-              const SizedBox(height: 8),
-            ],
+              ],
+            ),
           ),
-        ),
-      );
+          const Divider(height: 1),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 340),
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                if (allowClear)
+                  ListTile(
+                    leading: const Icon(
+                      Icons.do_not_disturb_alt,
+                      color: Colors.red,
+                      size: 20,
+                    ),
+                    title: const Text(
+                      'None',
+                      style: TextStyle(color: Colors.red),
+                    ),
+                    onTap: () => Navigator.pop(dCtx, {'id': '', 'name': ''}),
+                  ),
+                ...items.map((item) {
+                  final id = item[idKey]?.toString() ?? '';
+                  final name = item[nameKey]?.toString() ?? '';
+                  final selected = id == selectedId;
+                  return ListTile(
+                    leading: Icon(
+                      selected
+                          ? Icons.radio_button_checked
+                          : Icons.radio_button_unchecked,
+                      color: selected ? primaryColor : Colors.grey.shade400,
+                      size: 20,
+                    ),
+                    title: Text(name, style: const TextStyle(fontSize: 14)),
+                    onTap: () => Navigator.pop(dCtx, {'id': id, 'name': name}),
+                  );
+                }),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    ),
+  );
 
   // ─── Batch / Semester pickers ─────────────────────────────────────────────
 
@@ -512,8 +509,7 @@ class _HodTimetableScreenState extends State<HodTimetableScreen>
           child: Container(
             decoration: const BoxDecoration(
               color: Colors.white,
-              borderRadius:
-                  BorderRadius.vertical(top: Radius.circular(24)),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -522,13 +518,18 @@ class _HodTimetableScreenState extends State<HodTimetableScreen>
                   padding: const EdgeInsets.fromLTRB(20, 20, 8, 8),
                   child: Row(
                     children: [
-                      const Text('Select Batch',
-                          style: TextStyle(
-                              fontSize: 16, fontWeight: FontWeight.w600)),
+                      const Text(
+                        'Select Batch',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                       const Spacer(),
                       IconButton(
-                          icon: const Icon(Icons.close),
-                          onPressed: () => Navigator.pop(ctx)),
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
                     ],
                   ),
                 ),
@@ -537,8 +538,10 @@ class _HodTimetableScreenState extends State<HodTimetableScreen>
                   child: batches.isEmpty
                       ? const Padding(
                           padding: EdgeInsets.all(32),
-                          child: Text('No batches found in your department.',
-                              textAlign: TextAlign.center),
+                          child: Text(
+                            'No batches found in your department.',
+                            textAlign: TextAlign.center,
+                          ),
                         )
                       : ListView.builder(
                           shrinkWrap: true,
@@ -561,8 +564,9 @@ class _HodTimetableScreenState extends State<HodTimetableScreen>
                                   ? Text(
                                       'Current: Semester ${b['current_semester']}',
                                       style: TextStyle(
-                                          fontSize: 12,
-                                          color: Colors.grey.shade500),
+                                        fontSize: 12,
+                                        color: Colors.grey.shade500,
+                                      ),
                                     )
                                   : null,
                               onTap: () {
@@ -601,8 +605,7 @@ class _HodTimetableScreenState extends State<HodTimetableScreen>
           child: Container(
             decoration: const BoxDecoration(
               color: Colors.white,
-              borderRadius:
-                  BorderRadius.vertical(top: Radius.circular(24)),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -611,13 +614,18 @@ class _HodTimetableScreenState extends State<HodTimetableScreen>
                   padding: const EdgeInsets.fromLTRB(20, 20, 8, 8),
                   child: Row(
                     children: [
-                      const Text('Select Semester',
-                          style: TextStyle(
-                              fontSize: 16, fontWeight: FontWeight.w600)),
+                      const Text(
+                        'Select Semester',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                       const Spacer(),
                       IconButton(
-                          icon: const Icon(Icons.close),
-                          onPressed: () => Navigator.pop(ctx)),
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
                     ],
                   ),
                 ),
@@ -626,47 +634,48 @@ class _HodTimetableScreenState extends State<HodTimetableScreen>
                   child: ListView.builder(
                     shrinkWrap: true,
                     itemCount: 6,
-              itemBuilder: (_, i) {
-                final sem = i + 1;
-                final sel = selectedSemester == sem;
-                final isCurrent =
-                    selectedBatch?['current_semester'] == sem;
-                return ListTile(
-                  leading: Icon(
-                    sel
-                        ? Icons.radio_button_checked
-                        : Icons.radio_button_unchecked,
-                    color:
-                        sel ? primaryColor : Colors.grey.shade400,
-                    size: 20,
+                    itemBuilder: (_, i) {
+                      final sem = i + 1;
+                      final sel = selectedSemester == sem;
+                      final isCurrent =
+                          selectedBatch?['current_semester'] == sem;
+                      return ListTile(
+                        leading: Icon(
+                          sel
+                              ? Icons.radio_button_checked
+                              : Icons.radio_button_unchecked,
+                          color: sel ? primaryColor : Colors.grey.shade400,
+                          size: 20,
+                        ),
+                        title: Text('Semester $sem'),
+                        trailing: isCurrent
+                            ? Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: primaryColor.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  'Current',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: primaryColor,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              )
+                            : null,
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          setState(() => selectedSemester = sem);
+                          _loadTimetableData();
+                        },
+                      );
+                    },
                   ),
-                  title: Text('Semester $sem'),
-                  trailing: isCurrent
-                      ? Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: primaryColor.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            'Current',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: primaryColor,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        )
-                      : null,
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    setState(() => selectedSemester = sem);
-                    _loadTimetableData();
-                  },
-                );
-              },
-            ),
                 ),
                 const SizedBox(height: 16),
               ],
@@ -681,9 +690,8 @@ class _HodTimetableScreenState extends State<HodTimetableScreen>
 
   @override
   Widget build(BuildContext context) {
-    final isReady = selectedBatch != null &&
-        selectedSemester != null &&
-        !isLoadingData;
+    final isReady =
+        selectedBatch != null && selectedSemester != null && !isLoadingData;
 
     return Scaffold(
       backgroundColor: surfaceColor,
@@ -701,18 +709,24 @@ class _HodTimetableScreenState extends State<HodTimetableScreen>
                       width: 20,
                       height: 20,
                       child: CircularProgressIndicator(
-                          color: Colors.white, strokeWidth: 2),
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
                     ),
                   )
                 : TextButton.icon(
                     onPressed: _saveTimetable,
-                    icon: const Icon(Icons.save_outlined,
-                        color: Colors.white, size: 18),
+                    icon: const Icon(
+                      Icons.save_outlined,
+                      color: Colors.white,
+                      size: 18,
+                    ),
                     label: const Text(
                       'Save',
                       style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600),
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
         ],
@@ -730,8 +744,7 @@ class _HodTimetableScreenState extends State<HodTimetableScreen>
             Expanded(
               child: TabBarView(
                 controller: _tabController,
-                children: List.generate(
-                    5, (i) => _buildDayView(i + 1)),
+                children: List.generate(5, (i) => _buildDayView(i + 1)),
               ),
             ),
           ] else if (!isLoadingData)
@@ -742,34 +755,33 @@ class _HodTimetableScreenState extends State<HodTimetableScreen>
   }
 
   Widget _buildSelectors() => Container(
-        color: Colors.white,
-        padding:
-            const EdgeInsets.fromLTRB(16, 16, 16, 12),
-        child: Column(
-          children: [
-            _selectorTile(
-              icon: Icons.class_outlined,
-              label: selectedBatch != null
-                  ? selectedBatch!['name']?.toString() ?? 'Batch'
-                  : isLoadingBatches
-                      ? 'Loading batches…'
-                      : 'Select Batch',
-              hasValue: selectedBatch != null,
-              onTap: isLoadingBatches ? null : _showBatchPicker,
-            ),
-            const SizedBox(height: 10),
-            _selectorTile(
-              icon: Icons.calendar_view_month_outlined,
-              label: selectedSemester != null
-                  ? 'Semester $selectedSemester'
-                  : 'Select Semester',
-              hasValue: selectedSemester != null,
-              disabled: selectedBatch == null,
-              onTap: selectedBatch == null ? null : _showSemesterPicker,
-            ),
-          ],
+    color: Colors.white,
+    padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+    child: Column(
+      children: [
+        _selectorTile(
+          icon: Icons.class_outlined,
+          label: selectedBatch != null
+              ? selectedBatch!['name']?.toString() ?? 'Batch'
+              : isLoadingBatches
+              ? 'Loading batches…'
+              : 'Select Batch',
+          hasValue: selectedBatch != null,
+          onTap: isLoadingBatches ? null : _showBatchPicker,
         ),
-      );
+        const SizedBox(height: 10),
+        _selectorTile(
+          icon: Icons.calendar_view_month_outlined,
+          label: selectedSemester != null
+              ? 'Semester $selectedSemester'
+              : 'Select Semester',
+          hasValue: selectedSemester != null,
+          disabled: selectedBatch == null,
+          onTap: selectedBatch == null ? null : _showSemesterPicker,
+        ),
+      ],
+    ),
+  );
 
   Widget _selectorTile({
     required IconData icon,
@@ -777,67 +789,61 @@ class _HodTimetableScreenState extends State<HodTimetableScreen>
     required bool hasValue,
     VoidCallback? onTap,
     bool disabled = false,
-  }) =>
-      InkWell(
-        onTap: onTap,
+  }) => InkWell(
+    onTap: onTap,
+    borderRadius: BorderRadius.circular(12),
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: disabled ? Colors.grey.shade50 : surfaceColor,
         borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: disabled ? Colors.grey.shade50 : surfaceColor,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            icon,
+            color: disabled
+                ? Colors.grey.shade300
+                : hasValue
+                ? primaryColor
+                : Colors.grey.shade500,
+            size: 20,
           ),
-          child: Row(
-            children: [
-              Icon(icon,
-                  color: disabled
-                      ? Colors.grey.shade300
-                      : hasValue
-                          ? primaryColor
-                          : Colors.grey.shade500,
-                  size: 20),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: hasValue
-                        ? Colors.black87
-                        : Colors.grey.shade500,
-                  ),
-                ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 14,
+                color: hasValue ? Colors.black87 : Colors.grey.shade500,
               ),
-              Icon(Icons.expand_more,
-                  color: Colors.grey.shade400, size: 20),
-            ],
+            ),
           ),
-        ),
-      );
+          Icon(Icons.expand_more, color: Colors.grey.shade400, size: 20),
+        ],
+      ),
+    ),
+  );
 
   Widget _buildDayTabBar() => Container(
-        color: Colors.white,
-        child: TabBar(
-          controller: _tabController,
-          labelColor: primaryColor,
-          unselectedLabelColor: Colors.grey.shade500,
-          indicatorColor: primaryColor,
-          labelStyle: const TextStyle(
-              fontSize: 13, fontWeight: FontWeight.w600),
-          tabs: _dayShort
-              .map((d) => Tab(text: d))
-              .toList(),
-        ),
-      );
+    color: Colors.white,
+    child: TabBar(
+      controller: _tabController,
+      labelColor: primaryColor,
+      unselectedLabelColor: Colors.grey.shade500,
+      indicatorColor: primaryColor,
+      labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+      tabs: _dayShort.map((d) => Tab(text: d)).toList(),
+    ),
+  );
 
   Widget _buildDayView(int day) {
     // Count filled periods for this day
-    final filled =
-        List.generate(5, (h) => grid[day]![h + 1]!['subject_id']!)
-            .where((s) => s.isNotEmpty)
-            .length;
+    final filled = List.generate(
+      5,
+      (h) => grid[day]![h + 1]!['subject_id']!,
+    ).where((s) => s.isNotEmpty).length;
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -850,14 +856,14 @@ class _HodTimetableScreenState extends State<HodTimetableScreen>
               Text(
                 _dayLabels[day - 1],
                 style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.5),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.5,
+                ),
               ),
               const SizedBox(width: 8),
               Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 8, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: filled > 0
                       ? primaryColor.withOpacity(0.1)
@@ -869,9 +875,7 @@ class _HodTimetableScreenState extends State<HodTimetableScreen>
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w500,
-                    color: filled > 0
-                        ? primaryColor
-                        : Colors.grey.shade500,
+                    color: filled > 0 ? primaryColor : Colors.grey.shade500,
                   ),
                 ),
               ),
@@ -890,9 +894,7 @@ class _HodTimetableScreenState extends State<HodTimetableScreen>
     final hasStaff = cell['staff_id']!.isNotEmpty;
 
     return GestureDetector(
-      onTap: subjects.isEmpty
-          ? null
-          : () => _editSlot(day, hour),
+      onTap: subjects.isEmpty ? null : () => _editSlot(day, hour),
       child: Container(
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.all(14),
@@ -924,9 +926,7 @@ class _HodTimetableScreenState extends State<HodTimetableScreen>
                   style: TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.w700,
-                    color: hasSubject
-                        ? primaryColor
-                        : Colors.grey.shade400,
+                    color: hasSubject ? primaryColor : Colors.grey.shade400,
                   ),
                 ),
               ),
@@ -950,9 +950,11 @@ class _HodTimetableScreenState extends State<HodTimetableScreen>
                           const SizedBox(height: 4),
                           Row(
                             children: [
-                              Icon(Icons.person_outline,
-                                  size: 13,
-                                  color: Colors.grey.shade500),
+                              Icon(
+                                Icons.person_outline,
+                                size: 13,
+                                color: Colors.grey.shade500,
+                              ),
                               const SizedBox(width: 4),
                               Text(
                                 cell['staff_name']!,
@@ -967,9 +969,7 @@ class _HodTimetableScreenState extends State<HodTimetableScreen>
                       ],
                     )
                   : Text(
-                      subjects.isEmpty
-                          ? 'No subjects loaded'
-                          : 'Tap to assign',
+                      subjects.isEmpty ? 'No subjects loaded' : 'Tap to assign',
                       style: TextStyle(
                         fontSize: 13,
                         color: Colors.grey.shade400,
@@ -981,9 +981,7 @@ class _HodTimetableScreenState extends State<HodTimetableScreen>
             ),
             Icon(
               hasSubject ? Icons.edit_outlined : Icons.add_circle_outline,
-              color: hasSubject
-                  ? primaryColor
-                  : Colors.grey.shade300,
+              color: hasSubject ? primaryColor : Colors.grey.shade300,
               size: 20,
             ),
           ],
@@ -993,21 +991,17 @@ class _HodTimetableScreenState extends State<HodTimetableScreen>
   }
 
   Widget _buildEmptyHint() => Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.table_chart_outlined,
-                size: 64, color: Colors.grey.shade300),
-            const SizedBox(height: 16),
-            Text(
-              'Select a batch and semester\nto manage the timetable',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 15,
-                color: Colors.grey.shade500,
-              ),
-            ),
-          ],
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(Icons.table_chart_outlined, size: 64, color: Colors.grey.shade300),
+        const SizedBox(height: 16),
+        Text(
+          'Select a batch and semester\nto manage the timetable',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 15, color: Colors.grey.shade500),
         ),
-      );
+      ],
+    ),
+  );
 }

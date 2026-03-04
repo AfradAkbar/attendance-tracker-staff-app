@@ -155,7 +155,8 @@ class _HomeViewState extends State<HomeView> {
                       ValueListenableBuilder<UserModel?>(
                         valueListenable: userNotifier,
                         builder: (context, user, _) {
-                          if (user?.role != 'hod') return const SizedBox.shrink();
+                          if (user?.role != 'hod')
+                            return const SizedBox.shrink();
                           return Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 24),
                             child: Column(
@@ -336,9 +337,7 @@ class _HomeViewState extends State<HomeView> {
     return GestureDetector(
       onTap: () => Navigator.push(
         context,
-        MaterialPageRoute(
-          builder: (_) => const HodTimetableScreen(),
-        ),
+        MaterialPageRoute(builder: (_) => const HodTimetableScreen()),
       ),
       child: Container(
         padding: const EdgeInsets.all(16),
