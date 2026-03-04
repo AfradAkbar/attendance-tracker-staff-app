@@ -20,6 +20,7 @@ class _NotificationsViewState extends State<NotificationsView> {
 
   bool isLoading = false;
   int _pendingStudentCount = 0;
+  int _pendingAttendanceRequestCount = 0;
 
   @override
   void initState() {
@@ -29,6 +30,7 @@ class _NotificationsViewState extends State<NotificationsView> {
       _refreshNotifications();
     }
     _fetchPendingStudentCount();
+    _fetchPendingAttendanceRequestCount();
   }
 
   Future<void> _fetchPendingStudentCount() async {
@@ -40,6 +42,18 @@ class _NotificationsViewState extends State<NotificationsView> {
       }
     } catch (e) {
       print('Error fetching pending student count: $e');
+    }
+  }
+
+  Future<void> _fetchPendingAttendanceRequestCount() async {
+    try {
+      final response = await ApiService.get(kAttendanceRequests);
+      if (response != null && response['success'] == true) {
+        final data = response['data'] as List? ?? [];
+        setState(() => _pendingAttendanceRequestCount = data.length);
+      }
+    } catch (e) {
+      print('Error fetching attendance request count: $e');
     }
   }
 
@@ -220,21 +234,52 @@ class _NotificationsViewState extends State<NotificationsView> {
                             ],
                           ),
                           const SizedBox(width: 8),
-                          // Attendance Requests Button
-                          Container(
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: IconButton(
-                              onPressed: () => _showAttendanceRequests(),
-                              icon: const Icon(
-                                Icons.pending_actions,
-                                color: Colors.white,
-                                size: 26,
+                          // Attendance Requests Button with badge
+                          Stack(
+                            children: [
+                              Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: IconButton(
+                                  onPressed: () => _showAttendanceRequests(),
+                                  icon: const Icon(
+                                    Icons.pending_actions,
+                                    color: Colors.white,
+                                    size: 26,
+                                  ),
+                                  tooltip: 'Attendance Requests',
+                                ),
                               ),
-                              tooltip: 'Attendance Requests',
-                            ),
+                              if (_pendingAttendanceRequestCount > 0)
+                                Positioned(
+                                  right: 0,
+                                  top: 0,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(4),
+                                    decoration: const BoxDecoration(
+                                      color: Colors.red,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    constraints: const BoxConstraints(
+                                      minWidth: 18,
+                                      minHeight: 18,
+                                    ),
+                                    child: Text(
+                                      _pendingAttendanceRequestCount > 9
+                                          ? '9+'
+                                          : '$_pendingAttendanceRequestCount',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
                           const SizedBox(width: 8),
                           // HOD Send Notification Button
@@ -337,7 +382,9 @@ class _NotificationsViewState extends State<NotificationsView> {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const AttendanceRequestsView()),
-    );
+    ).then((_) {
+      _fetchPendingAttendanceRequestCount();
+    });
   }
 
   void _showSendNotificationDialog() {
