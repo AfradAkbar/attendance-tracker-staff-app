@@ -1,4 +1,4 @@
-const kBaseUrl = 'http://192.168.1.2:3000/api';
+const kBaseUrl = 'http://192.168.1.10:3000/api';
 
 const kStaffLoginRoute = '$kBaseUrl/staff/login';
 const kStaffProfile = '$kBaseUrl/staff/profile';
@@ -24,6 +24,13 @@ const kNotifications = '$kBaseUrl/notification';
 // HOD notification endpoints
 const kHodSendNotification = '$kBaseUrl/staff/hod/notifications';
 const kHodBatches = '$kBaseUrl/staff/hod/batches';
+
+// HOD timetable management endpoints
+const kHodSubjects = '$kBaseUrl/staff/hod/subjects'; // ?batch_id=X&semester=N
+const kHodDepartmentStaff = '$kBaseUrl/staff/hod/department-staff';
+const kHodTimetable =
+    '$kBaseUrl/staff/hod/timetable'; // GET /:batch_id?semester=N
+const kSaveHodTimetable = '$kBaseUrl/staff/hod/timetable'; // POST
 
 // Attendance requests (face verification failures)
 const kAttendanceRequests = '$kBaseUrl/staff/attendance-requests';

@@ -165,8 +165,8 @@ class _AttendanceViewState extends State<AttendanceView> {
                 record['student_id']?['_id']?.toString() ??
                 record['student_id']?.toString() ??
                 '';
-            final status = record['attendance_status']?.toString() ?? 'present';
-            if (studentId.isNotEmpty) {
+            final status = record['attendance_status']?.toString() ?? '';
+            if (studentId.isNotEmpty && status.isNotEmpty) {
               existingAttendance[studentId] = status;
             }
           }
@@ -174,11 +174,12 @@ class _AttendanceViewState extends State<AttendanceView> {
 
         setState(() {
           students = List<Map<String, dynamic>>.from(studentsData['data']);
-          // Set attendance status from existing records, or default to 'present'
+          // Only populate map from existing records; new students start with no selection
           for (var student in students) {
             final studentId = student['_id']?.toString() ?? '';
-            attendanceMap[studentId] =
-                existingAttendance[studentId] ?? 'present';
+            if (existingAttendance.containsKey(studentId)) {
+              attendanceMap[studentId] = existingAttendance[studentId]!;
+            }
           }
         });
       }
@@ -1099,7 +1100,7 @@ class _AttendanceViewState extends State<AttendanceView> {
     final studentId = student['_id']?.toString() ?? '';
     final studentName = student['name']?.toString() ?? '';
     final imageUrl = student['profile_image_url']?.toString() ?? '';
-    final status = attendanceMap[studentId] ?? 'present';
+    final status = attendanceMap[studentId] ?? '';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),

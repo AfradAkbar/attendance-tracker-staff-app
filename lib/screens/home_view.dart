@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:staff_app/api_service.dart';
 import 'package:staff_app/constants.dart';
 import 'package:staff_app/notifiers/user_notifier.dart';
+import 'package:staff_app/screens/hod_timetable_screen.dart';
 
 class HomeView extends StatefulWidget {
   const HomeView({super.key});
@@ -146,6 +147,27 @@ class _HomeViewState extends State<HomeView> {
                                   ),
                           ],
                         ),
+                      ),
+
+                      const SizedBox(height: 24),
+
+                      // HOD Tools Section (only visible for HOD role)
+                      ValueListenableBuilder<UserModel?>(
+                        valueListenable: userNotifier,
+                        builder: (context, user, _) {
+                          if (user?.role != 'hod') return const SizedBox.shrink();
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _sectionTitle("HOD TOOLS"),
+                                const SizedBox(height: 12),
+                                _buildHodTimetableCard(context),
+                              ],
+                            ),
+                          );
+                        },
                       ),
 
                       const SizedBox(height: 40),
@@ -306,6 +328,64 @@ class _HomeViewState extends State<HomeView> {
             style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildHodTimetableCard(BuildContext context) {
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const HodTimetableScreen(),
+        ),
+      ),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: primaryColor.withOpacity(0.2)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              height: 48,
+              width: 48,
+              decoration: BoxDecoration(
+                color: primaryColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.table_chart_outlined,
+                color: primaryColor,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 16),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Timetable Manager',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    'Create or edit timetables for your department batches',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right, color: Colors.grey.shade400),
+          ],
+        ),
       ),
     );
   }
