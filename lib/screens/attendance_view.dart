@@ -497,6 +497,12 @@ class _AttendanceViewState extends State<AttendanceView> {
         slot['subject']?['name']?.toString() ?? 'Unknown Subject';
     final batchName = slot['batch']?['name']?.toString() ?? '';
     final courseName = slot['batch']?['course']?.toString() ?? '';
+    final departmentName = slot['batch']?['department']?.toString() ?? '';
+    final startYear = slot['batch']?['start_year']?.toString() ?? '';
+    final endYear = slot['batch']?['end_year']?.toString() ?? '';
+    final batchYear = startYear.isNotEmpty && endYear.isNotEmpty
+        ? '$startYear – $endYear'
+        : '';
     final totalStudents = slot['total_students'] ?? 0;
     final markedCount = slot['marked_count'] ?? 0;
     final isMarked = slot['is_marked'] == true;
@@ -558,14 +564,50 @@ class _AttendanceViewState extends State<AttendanceView> {
                         ),
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                        batchName.isNotEmpty ? batchName : courseName,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.grey.shade600,
+                      if (courseName.isNotEmpty ||
+                          departmentName.isNotEmpty) ...[
+                        Text(
+                          [
+                            if (courseName.isNotEmpty) courseName,
+                            if (departmentName.isNotEmpty) departmentName,
+                          ].join(' · '),
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.grey.shade700,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 4),
+                        const SizedBox(height: 3),
+                      ],
+                      if (batchYear.isNotEmpty) ...[
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.calendar_today_outlined,
+                              size: 12,
+                              color: Colors.grey.shade400,
+                            ),
+                            const SizedBox(width: 3),
+                            Text(
+                              batchYear,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey.shade500,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                      ] else ...[
+                        Text(
+                          batchName,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade500,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                      ],
                       Row(
                         children: [
                           Icon(
